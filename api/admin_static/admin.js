@@ -61,6 +61,7 @@ function providerName(providerId) {
   const names = {
     nvidia_nim: "NVIDIA NIM",
     open_router: "OpenRouter",
+    codestral: "Codestral",
     mistral_codestral: "Mistral Codestral",
     deepseek: "DeepSeek",
     lmstudio: "LM Studio",

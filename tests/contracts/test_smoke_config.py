@@ -126,6 +126,39 @@ def test_wafer_provider_configuration_uses_api_key(monkeypatch) -> None:
     assert models[0].full_model == PROVIDER_SMOKE_DEFAULT_MODELS["wafer"]
 
 
+def test_codestral_provider_smoke_does_not_duplicate_legacy_alias(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("FCC_SMOKE_MODEL_CODESTRAL", raising=False)
+    monkeypatch.delenv("FCC_SMOKE_MODEL_MISTRAL_CODESTRAL", raising=False)
+    config = _smoke_config(
+        settings=_settings(
+            model="ollama/llama3.1",
+            ollama_base_url="",
+            codestral_api_key="codestral-key",
+        ),
+    )
+
+    assert [model.provider for model in config.provider_smoke_models()] == ["codestral"]
+
+
+def test_codestral_provider_configuration_uses_codestral_api_key(monkeypatch) -> None:
+    monkeypatch.delenv("FCC_SMOKE_MODEL_CODESTRAL", raising=False)
+    config = _smoke_config(
+        settings=_settings(
+            model="ollama/llama3.1",
+            ollama_base_url="",
+            codestral_api_key="codestral-key",
+        ),
+        provider_matrix=frozenset({"codestral"}),
+    )
+
+    assert config.has_provider_configuration("codestral")
+    models = config.provider_smoke_models()
+    assert models[0].provider == "codestral"
+    assert models[0].full_model == PROVIDER_SMOKE_DEFAULT_MODELS["codestral"]
+
+
 def test_provider_smoke_model_override_accepts_model_name_without_prefix(
     monkeypatch,
 ) -> None:

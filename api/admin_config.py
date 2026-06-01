@@ -814,6 +814,12 @@ FIELDS: tuple[ConfigFieldSpec, ...] = (
         advanced=True,
     ),
     ConfigFieldSpec(
+        "FCC_SMOKE_MODEL_CODESTRAL",
+        "Smoke Codestral Model",
+        "smoke",
+        advanced=True,
+    ),
+    ConfigFieldSpec(
         "FCC_SMOKE_MODEL_MISTRAL_CODESTRAL",
         "Smoke Mistral Codestral Model",
         "smoke",

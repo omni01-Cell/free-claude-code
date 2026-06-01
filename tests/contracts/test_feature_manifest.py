@@ -80,6 +80,7 @@ def test_provider_and_platform_registries_include_advertised_builtins() -> None:
         "nvidia_nim": NvidiaNimProvider,
         "open_router": OpenRouterProvider,
         "mistral": MistralProvider,
+        "codestral": CodestralProvider,
         "mistral_codestral": CodestralProvider,
         "deepseek": DeepSeekProvider,
         "kimi": KimiProvider,

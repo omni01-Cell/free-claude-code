@@ -10,6 +10,7 @@ _EXPECTED_PROVIDER_ORDER: tuple[str, ...] = (
     "gemini",
     "deepseek",
     "mistral",
+    "codestral",
     "mistral_codestral",
     "opencode",
     "opencode_go",
@@ -26,7 +27,7 @@ _EXPECTED_PROVIDER_ORDER: tuple[str, ...] = (
 
 
 def test_provider_catalog_key_order_matches_canonical_plan() -> None:
-    """NIM first; DeepSeek fourth; Wafer ninth / Kimi tenth (see contributor plan)."""
+    """NIM first; DeepSeek fourth; Wafer tenth / Kimi eleventh (see contributor plan)."""
 
     assert tuple(PROVIDER_CATALOG.keys()) == _EXPECTED_PROVIDER_ORDER
     assert SUPPORTED_PROVIDER_IDS == _EXPECTED_PROVIDER_ORDER

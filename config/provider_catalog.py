@@ -104,6 +104,16 @@ PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
         proxy_attr="mistral_proxy",
         capabilities=("chat", "streaming", "tools", "thinking", "rate_limit"),
     ),
+    "codestral": ProviderDescriptor(
+        provider_id="codestral",
+        transport_type="openai_chat",
+        credential_env="CODESTRAL_API_KEY",
+        credential_url="https://console.mistral.ai/",
+        credential_attr="codestral_api_key",
+        default_base_url=CODESTRAL_DEFAULT_BASE,
+        proxy_attr="codestral_proxy",
+        capabilities=("chat", "streaming", "tools", "thinking", "rate_limit"),
+    ),
     "mistral_codestral": ProviderDescriptor(
         provider_id="mistral_codestral",
         transport_type="openai_chat",
@@ -249,7 +259,7 @@ PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
 }
 
 # Key order:
-# NVIDIA NIM first (README default), DeepSeek fourth, Wafer ninth / Kimi tenth; then cerebras /
+# NVIDIA NIM first (README default), DeepSeek fourth, Wafer tenth / Kimi eleventh; then cerebras /
 # groq / fireworks overlap; remainder and locals last per project plan (
 # github.com/cheahjs/free-llm-api-resources Free Providers TOC as rough guide beyond fixed slots).
 # ``SUPPORTED_PROVIDER_IDS`` inherits this insertion order for UI and error-message listing.

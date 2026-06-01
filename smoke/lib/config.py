@@ -45,6 +45,7 @@ PROVIDER_SMOKE_DEFAULT_MODELS: dict[str, str] = {
     "nvidia_nim": "nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
     "open_router": "open_router/openrouter/free",
     "mistral": "mistral/devstral-small-latest",
+    "codestral": "codestral/codestral-latest",
     "mistral_codestral": "mistral_codestral/codestral-latest",
     "deepseek": "deepseek/deepseek-v4-pro",
     "lmstudio": "lmstudio/local-model",
@@ -215,6 +216,12 @@ class SmokeConfig:
     def _include_provider_in_smoke(
         self, provider: str, mapped_providers: set[str]
     ) -> bool:
+        if provider == "mistral_codestral":
+            return (
+                provider in mapped_providers
+                or bool(self.provider_matrix and provider in self.provider_matrix)
+                or bool(os.getenv("FCC_SMOKE_MODEL_MISTRAL_CODESTRAL"))
+            )
         descriptor = PROVIDER_CATALOG[provider]
         if "local" not in descriptor.capabilities:
             return True
@@ -231,7 +238,7 @@ class SmokeConfig:
             return bool(self.settings.open_router_api_key.strip())
         if provider == "mistral":
             return bool(self.settings.mistral_api_key.strip())
-        if provider == "mistral_codestral":
+        if provider in ("codestral", "mistral_codestral"):
             return bool(self.settings.codestral_api_key.strip())
         if provider == "deepseek":
             return bool(self.settings.deepseek_api_key.strip())

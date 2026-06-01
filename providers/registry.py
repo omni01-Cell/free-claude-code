@@ -50,9 +50,7 @@ def _create_mistral(config: ProviderConfig, _settings: Settings) -> BaseProvider
     return MistralProvider(config)
 
 
-def _create_mistral_codestral(
-    config: ProviderConfig, _settings: Settings
-) -> BaseProvider:
+def _create_codestral(config: ProviderConfig, _settings: Settings) -> BaseProvider:
     from providers.codestral import CodestralProvider
 
     return CodestralProvider(config)
@@ -142,7 +140,8 @@ PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
     "gemini": _create_gemini,
     "deepseek": _create_deepseek,
     "mistral": _create_mistral,
-    "mistral_codestral": _create_mistral_codestral,
+    "codestral": _create_codestral,
+    "mistral_codestral": _create_codestral,
     "opencode": _create_opencode,
     "opencode_go": _create_opencode_go,
     "wafer": _create_wafer,
