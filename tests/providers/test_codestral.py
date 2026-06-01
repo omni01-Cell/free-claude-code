@@ -7,6 +7,7 @@ import pytest
 
 from providers.base import ProviderConfig
 from providers.codestral import CODESTRAL_DEFAULT_BASE, CodestralProvider
+from providers.codestral.request import build_request_body
 
 
 class MockMessage:
@@ -77,6 +78,11 @@ def test_init(codestral_config):
 
 def test_default_base_url():
     assert CODESTRAL_DEFAULT_BASE == "https://codestral.mistral.ai/v1"
+
+
+def test_codestral_has_provider_owned_request_builder():
+    """Codestral request conversion is owned by the Codestral provider package."""
+    assert build_request_body.__module__ == "providers.codestral.request"
 
 
 def test_build_request_body_basic(codestral_provider):

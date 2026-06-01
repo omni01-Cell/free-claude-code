@@ -6,15 +6,17 @@ from typing import Any
 
 from providers.base import ProviderConfig
 from providers.defaults import CODESTRAL_DEFAULT_BASE
-from providers.mistral.request import build_request_body
 from providers.openai_compat import OpenAIChatTransport
+
+from .request import build_request_body
 
 
 class CodestralProvider(OpenAIChatTransport):
     """Codestral host using ``https://codestral.mistral.ai/v1/chat/completions``.
 
     Uses a separate Codestral API key from La Plateforme (``MISTRAL_API_KEY``).
-    Request shaping matches Mistral La Plateforme (shared ``build_request_body``).
+    Request shaping is owned by this package so it can evolve independently from
+    Mistral La Plateforme.
     """
 
     def __init__(self, config: ProviderConfig):

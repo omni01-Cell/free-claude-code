@@ -233,6 +233,19 @@ async def test_get_provider_mistral():
 
 
 @pytest.mark.asyncio
+async def test_get_provider_codestral():
+    """provider_type=codestral returns the dedicated CodestralProvider."""
+    with patch("api.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value = _make_mock_settings(provider_type="codestral")
+
+        provider = get_provider()
+
+        assert isinstance(provider, CodestralProvider)
+        assert provider._base_url == "https://codestral.mistral.ai/v1"
+        assert provider._api_key == "test_codestral_key"
+
+
+@pytest.mark.asyncio
 async def test_get_provider_mistral_codestral():
     """provider_type=mistral_codestral returns CodestralProvider."""
     with patch("api.dependencies.get_settings") as mock_settings:
@@ -494,6 +507,23 @@ async def test_get_provider_mistral_missing_api_key():
 
         assert exc_info.value.status_code == 503
         assert "MISTRAL_API_KEY" in exc_info.value.detail
+        assert "console.mistral.ai" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_provider_codestral_missing_api_key():
+    """Codestral with empty API key raises HTTPException 503."""
+    with patch("api.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value = _make_mock_settings(
+            provider_type="codestral",
+            codestral_api_key="",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_provider()
+
+        assert exc_info.value.status_code == 503
+        assert "CODESTRAL_API_KEY" in exc_info.value.detail
         assert "console.mistral.ai" in exc_info.value.detail
 
 

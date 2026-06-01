@@ -761,6 +761,7 @@ class TestPerModelMapping:
         assert (
             Settings.parse_provider_type("mistral/devstral-small-latest") == "mistral"
         )
+        assert Settings.parse_provider_type("codestral/codestral-latest") == "codestral"
         assert (
             Settings.parse_provider_type("mistral_codestral/codestral-latest")
             == "mistral_codestral"
@@ -785,6 +786,10 @@ class TestPerModelMapping:
         assert (
             Settings.parse_model_name("mistral/devstral-small-latest")
             == "devstral-small-latest"
+        )
+        assert (
+            Settings.parse_model_name("codestral/codestral-latest")
+            == "codestral-latest"
         )
         assert (
             Settings.parse_model_name("mistral_codestral/codestral-latest")

@@ -14,7 +14,7 @@ Use Claude Code CLI, VS Code, JetBrains ACP, or chat bots through your own Anthr
 
 Free Claude Code routes Anthropic Messages API traffic from Claude Code to any provider. It keeps Claude Code's client-side protocol stable while letting you choose free, paid, or local models.
 
-[Quick Start](#quick-start) · [Providers](#choose-a-provider) · [Clients](#connect-claude-code) · [Integrations](#optional-integrations) · [Development](#development)
+[Quick Start](#quick-start) · [Codestral Guide](docs/codestral-guide-non-specialistes.md) · [Providers](#choose-a-provider) · [Clients](#connect-claude-code) · [Integrations](#optional-integrations) · [Development](#development)
 
 </div>
 
@@ -164,11 +164,12 @@ Browse models at [Mistral documentation](https://docs.mistral.ai/).
 
 ### 6. [Mistral Codestral](https://console.mistral.ai/)
 
-Mistral's **Codestral** gateway uses a **separate API key** from La Plateforme: provision `CODESTRAL_API_KEY`, then route with the `mistral_codestral/` prefix. The default upstream is **`https://codestral.mistral.ai/v1`** (OpenAI-compatible Chat Completions; same request shaping as the `mistral` provider). See Mistral's [coding / FIM domains](https://docs.mistral.ai/mistral-vibe/using-fim-api); the curated [free LLM API list](https://github.com/cheahjs/free-llm-api-resources#mistral-codestral) summarizes typical Codestral access terms.
+Mistral's **Codestral** gateway uses a **separate API key** from La Plateforme: provision `CODESTRAL_API_KEY`, then route with the dedicated `codestral/` provider prefix. If you want a step-by-step walkthrough, use the [non-specialist Codestral guide](docs/codestral-guide-non-specialistes.md). The legacy `mistral_codestral/` prefix remains supported for existing configurations. The default upstream is **`https://codestral.mistral.ai/v1`** (OpenAI-compatible Chat Completions with provider-owned request shaping). See Mistral's [coding / FIM domains](https://docs.mistral.ai/mistral-vibe/using-fim-api); the curated [free LLM API list](https://github.com/cheahjs/free-llm-api-resources#mistral-codestral) summarizes typical Codestral access terms.
 
 Popular examples:
 
-- `mistral_codestral/codestral-latest`
+- `codestral/codestral-latest`
+- `mistral_codestral/codestral-latest` (legacy alias)
 
 ### 7. [OpenCode Zen](https://opencode.ai/)
 
