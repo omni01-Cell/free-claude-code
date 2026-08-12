@@ -15,13 +15,13 @@ Maintenir le serveur proxy local free-claude-code à un niveau de qualité zéro
 - 2026-08-12: **Stratégie de synchronisation upstream** : Les commits amont de `Alishahryar1/free-claude-code` ont été intégrés d'abord sur la branche dédiée `upstream-sync`, les conflits sur `provider_catalog.py`, `settings.py`, `pyproject.toml`, et la suite de tests ont été résolus en conservant tous les providers locaux et amont, puis fusionnés vers `main` (`v4.23.0`).
 
 ## 🌿 Active Branches / Plans
+- `pr/upstream-submission` : Branche dédiée dans le worktree `/home/omni/free-claude-code-pr` configurée pour soumettre la Pull Request vers `Alishahryar1/free-claude-code:main`.
 - `main` : Branche principale à jour avec `upstream/main` (`v4.23.0`), 100% qualifiée avec 2968 tests passés.
-- `upstream-sync` : Branche de synchronisation miroir pushed sur `origin/upstream-sync`.
 
 ## 📈 Current Status
-- ✅ Done: Synchronisation upstream `v4.23.0` complète, tests (2968 passed), linter (ruff) et type checker (ty) 100% verts, branch `main` et `upstream-sync` poussées sur `origin`.
-- 🔄 In progress: Aucun.
-- ⏳ Pending: Attente de nouvelles directives utilisateur.
+- ✅ Done: Worktree `/home/omni/free-claude-code-pr` créé sur la branche `pr/upstream-submission`, installateurs adaptés pour amont, 100% CI validée et branche poussée sur `origin/pr/upstream-submission`.
+- 🔄 In progress: Branche PR disponible pour soumission.
+- ⏳ Pending: Ouverture de la Pull Request sur GitHub.
 
 ## 👉 Next Session Direction
 Le projet est parfaitement synchronisé avec amont et qualifié CI à 100%. Prêt pour l'implémentation de nouvelles fonctionnalités ou la maintenance courante.
