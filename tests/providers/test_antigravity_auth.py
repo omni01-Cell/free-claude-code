@@ -359,3 +359,45 @@ async def test_antigravity_auth_manager_lifecycle(tmp_path: Path):
     assert not manager.is_connected()
 
     await manager.close()
+
+
+@pytest.mark.asyncio
+async def test_antigravity_browser_authorization_state_validation():
+    from free_claude_code.providers.antigravity.auth import (
+        AntigravityBrowserAuthorization,
+    )
+
+    auth = await AntigravityBrowserAuthorization.start()
+    try:
+        assert "state=" in auth.auth_url
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(auth.auth_url)
+        params = urllib.parse.parse_qs(parsed.query)
+        expected_state = params["state"][0]
+
+        import httpx
+
+        # Unsolicited callback (missing state) -> Rejected HTTP 400
+        resp_no_state = await httpx.AsyncClient().get(
+            f"{auth.redirect_uri}?code=test_code_123"
+        )
+        assert resp_no_state.status_code == 400
+        assert "OAuth state parameter mismatch" in resp_no_state.text
+
+        # Unsolicited callback (invalid state) -> Rejected HTTP 400
+        resp_bad_state = await httpx.AsyncClient().get(
+            f"{auth.redirect_uri}?code=test_code_123&state=attacker_state"
+        )
+        assert resp_bad_state.status_code == 400
+        assert "OAuth state parameter mismatch" in resp_bad_state.text
+
+        # Valid callback (matching state) -> Success HTTP 200
+        resp_valid = await httpx.AsyncClient().get(
+            f"{auth.redirect_uri}?code=test_code_123&state={expected_state}"
+        )
+        assert resp_valid.status_code == 200
+        grant = await auth.wait()
+        assert grant.code == "test_code_123"
+    finally:
+        await auth.close()

@@ -110,10 +110,19 @@ Les outils transmis par Claude Code (`exec_command`, `file_read`, etc.) utilisen
 La fonction `_clean_gemini_schema` nettoie récursivement les schémas avant transmission :
 ```python
 UNSUPPORTED_GEMINI_SCHEMA_KEYS = {
-    "$schema", "$id", "$comment", "propertyNames", "const",
-    "exclusiveMinimum", "exclusiveMaximum", "patternProperties",
-    "unevaluatedProperties", "unevaluatedItems", "contains",
-    "minContains", "maxContains",
+    "$schema",
+    "$id",
+    "$comment",
+    "propertyNames",
+    "const",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "patternProperties",
+    "unevaluatedProperties",
+    "unevaluatedItems",
+    "contains",
+    "minContains",
+    "maxContains",
 }
 ```
 

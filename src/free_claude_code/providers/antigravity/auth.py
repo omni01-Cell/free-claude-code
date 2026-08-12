@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import os
+import secrets
 import time
 import urllib.parse
 import uuid
@@ -708,6 +709,7 @@ class AntigravityBrowserAuthorization:
         result: asyncio.Future[AntigravityAuthorizationGrant] = loop.create_future()
         runner: web.AppRunner | None = None
         redirect_uri = ""
+        expected_state = secrets.token_urlsafe(32)
         for port in (8085, 8086, 8087, 8088):
             candidate_uri = f"http://localhost:{port}/oauth/callback"
             app = web.Application()
@@ -715,6 +717,16 @@ class AntigravityBrowserAuthorization:
             async def callback(
                 request: web.Request, cb_uri: str = candidate_uri
             ) -> web.Response:
+                cb_state = request.query.get("state")
+                if not cb_state or cb_state != expected_state:
+                    logger.warning(
+                        "Rejected unsolicited OAuth callback: invalid or missing state parameter."
+                    )
+                    return web.Response(
+                        status=400,
+                        text="Authentication failed: OAuth state parameter mismatch",
+                        content_type="text/html",
+                    )
                 if error := request.query.get("error"):
                     desc = request.query.get("error_description", error)
                     if not result.done():
@@ -780,6 +792,7 @@ class AntigravityBrowserAuthorization:
             "scope": " ".join(scopes),
             "access_type": "offline",
             "prompt": "consent",
+            "state": expected_state,
         }
         auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
         return cls(
