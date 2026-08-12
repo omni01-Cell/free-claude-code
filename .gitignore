@@ -15,3 +15,5 @@ debug-*.log
 llama_cache
 .smoke-results
 .vscode
+graphify-out/
+git_credential.json

@@ -6,6 +6,7 @@ Authenticates user account with Google Cloud Code Assist API and saves fresh OAu
 import contextlib
 import json
 import logging
+import secrets
 import time
 import urllib.parse
 import webbrowser
@@ -39,6 +40,7 @@ TOKEN_SAVE_PATHS = [
 ]
 
 auth_code_received: str | None = None
+expected_oauth_state: str | None = None
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -46,6 +48,15 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         global auth_code_received
         parsed_url = urllib.parse.urlparse(self.path)
         query_params = urllib.parse.parse_qs(parsed_url.query)
+
+        cb_state = query_params.get("state", [None])[0]
+        if not cb_state or cb_state != expected_oauth_state:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(
+                b"Authentication failed: Invalid state parameter (unsolicited callback)."
+            )
+            return
 
         if "code" in query_params:
             auth_code_received = query_params["code"][0]
@@ -73,6 +84,9 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    global expected_oauth_state
+    expected_oauth_state = secrets.token_urlsafe(32)
+
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -80,6 +94,7 @@ def main() -> None:
         "scope": " ".join(SCOPES),
         "access_type": "offline",
         "prompt": "consent",
+        "state": expected_oauth_state,
     }
 
     auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(
