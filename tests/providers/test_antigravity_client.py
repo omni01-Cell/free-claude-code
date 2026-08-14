@@ -73,9 +73,11 @@ def antigravity_provider(provider_config, mock_auth):
 
 
 def test_normalize_model_name():
-    assert _normalize_model_name("models/gemini-2.5-pro") == "gemini-2.5-pro"
-    assert _normalize_model_name("antigravity/gemini-3.5-pro") == "gemini-3.5-pro"
+    assert _normalize_model_name("models/gemini-2.5-pro") == "gemini-3.6-flash-high"
+    assert _normalize_model_name("antigravity/claude-3-7-sonnet") == "claude-sonnet-4-6"
+    assert _normalize_model_name("claude-3-opus") == "claude-opus-4-6-thinking"
     assert _normalize_model_name("gemini-2.5-flash") == "gemini-2.5-flash"
+    assert _normalize_model_name("gemini-3.6-flash-high") == "gemini-3.6-flash-high"
 
 
 def test_convert_anthropic_tools_to_gemini():
@@ -160,8 +162,8 @@ async def test_list_model_ids(antigravity_provider):
         antigravity_provider._client, "post", AsyncMock(return_value=mock_resp)
     ):
         model_ids = await antigravity_provider.list_model_ids()
-        assert "gemini-2.5-pro" in model_ids
-        assert "antigravity/gemini-2.5-pro" in model_ids
+        assert "gemini-3.6-flash-high" in model_ids
+        assert "antigravity/gemini-3.6-flash-high" in model_ids
         assert "gemini-3.5-pro" in model_ids
 
 
@@ -641,4 +643,59 @@ async def test_antigravity_list_model_ids_fallback_cli(antigravity_provider):
 
         assert "gemini-3.6-flash-low" in model_ids
         assert "antigravity/gemini-3.6-flash-low" in model_ids
-        assert "gemini-3.7-flash-high" in model_ids
+
+
+@pytest.mark.asyncio
+async def test_stream_response_endpoint_failover(antigravity_provider):
+    req = MockRequest()
+
+    # Stream 1 (on primary base url): fails with 429
+    mock_resp_429 = AsyncMock()
+    mock_resp_429.status_code = 429
+    mock_resp_429.text = '{"error": {"message": "Resource has been exhausted"}}'
+    mock_resp_429.aread = AsyncMock()
+
+    class MockStreamContext429:
+        async def __aenter__(self):
+            return mock_resp_429
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    # Stream 2 (on secondary base url): succeeds with 200 OK
+    sse_lines = [
+        'data: {"candidates": [{"content": {"role": "model", "parts": [{"text": "Hello from daily endpoint"}]}}], "finishReason": "STOP"}\n\n',
+    ]
+
+    async def mock_aiter_lines():
+        for line in sse_lines:
+            yield line
+
+    mock_resp_200 = AsyncMock()
+    mock_resp_200.status_code = 200
+    mock_resp_200.aiter_lines = mock_aiter_lines
+
+    class MockStreamContext200:
+        async def __aenter__(self):
+            return mock_resp_200
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    call_count = 0
+
+    def mock_stream_factory(method, url, headers=None, json=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return MockStreamContext429()
+        return MockStreamContext200()
+
+    with patch.object(
+        antigravity_provider._client, "stream", side_effect=mock_stream_factory
+    ):
+        events = [chunk async for chunk in antigravity_provider.stream_response(req)]
+        full_stream = "".join(events)
+        assert call_count >= 2
+        assert "Hello from daily endpoint" in full_stream
+        assert "event: message_stop" in full_stream

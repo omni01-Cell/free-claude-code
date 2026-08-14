@@ -14,7 +14,9 @@ from free_claude_code.providers.antigravity.auth import (
     ANTIGRAVITY_USER_AGENT,
     DEFAULT_FALLBACK_PROJECT_ID,
     AntigravityAuth,
+    _parse_keyring_secret,
     decode_jwt_payload,
+    get_candidate_token_files,
     is_token_expired,
     load_antigravity_token,
     load_code_assist_async,
@@ -522,3 +524,95 @@ async def test_antigravity_disconnect_does_not_touch_host_files(
     assert (
         json.loads(host_token.read_text(encoding="utf-8"))["access_token"] == "host_tok"
     )
+
+
+def test_parse_keyring_secret():
+
+    # Nested token object
+    raw_nested = json.dumps(
+        {
+            "token": {
+                "access_token": "keyring_acc_123",
+                "refresh_token": "keyring_ref_456",
+                "expiry": "2026-08-14T20:50:40Z",
+                "token_type": "Bearer",
+            },
+            "auth_method": "consumer",
+            "email": "keyring_user@gmail.com",
+        }
+    )
+    parsed = _parse_keyring_secret(raw_nested)
+    assert parsed is not None
+    assert parsed["access_token"] == "keyring_acc_123"
+    assert parsed["refresh_token"] == "keyring_ref_456"
+    assert parsed["email"] == "keyring_user@gmail.com"
+
+    # Flat token object
+    raw_flat = json.dumps(
+        {
+            "access_token": "flat_acc_789",
+            "refresh_token": "flat_ref_012",
+            "email": "flat@example.com",
+        }
+    )
+    parsed_flat = _parse_keyring_secret(raw_flat)
+    assert parsed_flat is not None
+    assert parsed_flat["access_token"] == "flat_acc_789"
+
+    # Invalid JSON or non-string
+    assert _parse_keyring_secret("") is None
+    assert _parse_keyring_secret("{invalid") is None
+    assert _parse_keyring_secret("{}") is None
+
+
+def test_get_candidate_token_files_strict_isolation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.delenv("ANTIGRAVITY_TOKEN_FILE", raising=False)
+    fcc_auth = tmp_path / "fcc" / "oauth.json"
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fcc_auth,
+    )
+
+    candidates = get_candidate_token_files()
+    assert candidates == [fcc_auth]
+
+
+def test_load_antigravity_token_strict_isolation_when_fcc_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.delenv("ANTIGRAVITY_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_TOKEN_FILE", raising=False)
+    fcc_auth = tmp_path / "non_existent" / "oauth.json"
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fcc_auth,
+    )
+
+    with pytest.raises(AuthenticationError, match="No Antigravity token found"):
+        load_antigravity_token()
+
+
+@pytest.mark.asyncio
+async def test_antigravity_auth_strict_isolation_when_fcc_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.delenv("ANTIGRAVITY_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_TOKEN_FILE", raising=False)
+    fcc_auth = tmp_path / "non_existent" / "oauth.json"
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fcc_auth,
+    )
+
+    auth = AntigravityAuth()
+    with pytest.raises(
+        AuthenticationError, match="No valid Antigravity CLI token found"
+    ):
+        auth.get_access_token()
+
+    with pytest.raises(
+        AuthenticationError, match="No valid Antigravity CLI token found"
+    ):
+        await auth.get_access_token_async()

@@ -20,6 +20,7 @@ from free_claude_code.core.reasoning import DEFAULT_REASONING_POLICY, ReasoningP
 from free_claude_code.providers.antigravity.auth import (
     ANTIGRAVITY_CLIENT_NAME,
     ANTIGRAVITY_DEFAULT_BASE_URL,
+    ANTIGRAVITY_FALLBACK_BASE_URLS,
     ANTIGRAVITY_GOOG_API_CLIENT,
     ANTIGRAVITY_USER_AGENT,
     DEFAULT_FALLBACK_PROJECT_ID,
@@ -37,12 +38,44 @@ from free_claude_code.providers.model_listing import model_infos_from_ids
 
 logger = logging.getLogger(__name__)
 
+# Transparent mapping of Claude Code, Codex, and common client aliases to active CodeAssist model IDs
+ANTIGRAVITY_MODEL_ALIASES: dict[str, str] = {
+    # Claude mappings
+    "claude-3-7-sonnet": "claude-sonnet-4-6",
+    "claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
+    "claude-3-5-sonnet": "claude-sonnet-4-6",
+    "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
+    "claude-3-5-sonnet-20240620": "claude-sonnet-4-6",
+    "claude-3-opus": "claude-opus-4-6-thinking",
+    "claude-3-opus-20240229": "claude-opus-4-6-thinking",
+    "claude-opus-4-6": "claude-opus-4-6-thinking",
+    "claude-3-5-haiku": "gemini-3.1-flash-lite",
+    "claude-3-5-haiku-20241022": "gemini-3.1-flash-lite",
+    "claude-3-haiku": "gemini-3.1-flash-lite",
+    "claude-3-haiku-20240307": "gemini-3.1-flash-lite",
+    # Gemini aliases
+    "gemini-3.7-flash": "gemini-3.6-flash-high",
+    "gemini-3.7-flash-high": "gemini-3.6-flash-high",
+    "gemini-3.7-flash-medium": "gemini-3.6-flash-medium",
+    "gemini-3.7-flash-low": "gemini-3.6-flash-low",
+    "gemini-3.7-flash-tiered": "gemini-3.6-flash-tiered",
+    "gemini-2.5-pro": "gemini-3.6-flash-high",
+    "gemini-2.5-pro-preview": "gemini-3.6-flash-high",
+    "gemini-pro": "gemini-3.6-flash-high",
+    "gemini-flash": "gemini-3.6-flash-high",
+    # OpenAI / Codex mappings
+    "gpt-4o": "gpt-oss-120b-medium",
+    "gpt-4o-mini": "gemini-3.1-flash-lite",
+    "o1": "gpt-oss-120b-medium",
+    "o3-mini": "gemini-3.1-flash-lite",
+}
+
 
 def _normalize_model_name(model: str) -> str:
-    """Normalize model identifier by stripping prefixes."""
-    m = str(model)
+    """Normalize model identifier by stripping prefixes and mapping known client aliases."""
+    m = str(model).strip()
     m = m.removeprefix("models/").removeprefix("antigravity/")
-    return m
+    return ANTIGRAVITY_MODEL_ALIASES.get(m, m)
 
 
 def _extract_error_message(raw_text: str) -> str:
@@ -485,100 +518,123 @@ class AntigravityProvider(BaseProvider):
             project_id = await self._auth.get_project_id_async()
             headers = self._build_request_headers(access_token)
 
-            # Primary: POST /v1internal:fetchAvailableModels
-            try:
-                res = await self._client.post(
-                    f"{self._base_url}/v1internal:fetchAvailableModels",
-                    headers=headers,
-                    json={"project": project_id} if project_id else {},
-                    timeout=5.0,
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    models_dict = data.get("models", {})
-                    if isinstance(models_dict, dict):
-                        for model_id in models_dict:
-                            norm = _normalize_model_name(str(model_id))
-                            fetched_ids.add(norm)
-                            fetched_ids.add(f"antigravity/{norm}")
-                    sorts = data.get("agentModelSorts", [])
-                    if isinstance(sorts, list):
-                        for sort_entry in sorts:
-                            if isinstance(sort_entry, dict):
-                                for grp in sort_entry.get("groups", []):
-                                    if isinstance(grp, dict):
-                                        for m in grp.get("modelIds", []):
-                                            norm = _normalize_model_name(str(m))
-                                            fetched_ids.add(norm)
-                                            fetched_ids.add(f"antigravity/{norm}")
-                    tiered = data.get("tieredModelIds", {})
-                    if isinstance(tiered, dict):
-                        for t_models in tiered.values():
-                            if isinstance(t_models, list):
-                                for m in t_models:
-                                    norm = _normalize_model_name(str(m))
-                                    fetched_ids.add(norm)
-                                    fetched_ids.add(f"antigravity/{norm}")
-            except Exception as exc:
-                logger.debug("POST fetchAvailableModels failed: %s", exc)
+            candidate_base_urls = [self._base_url]
+            for fb in ANTIGRAVITY_FALLBACK_BASE_URLS:
+                if fb not in candidate_base_urls:
+                    candidate_base_urls.append(fb)
 
-            # Fallback 1: POST /v1internal:retrieveUserQuota
-            if not fetched_ids:
+            # Try candidate base URLs for discovery
+            for base_url in candidate_base_urls:
+                if fetched_ids:
+                    break
+                # Primary: POST /v1internal:fetchAvailableModels
                 try:
                     res = await self._client.post(
-                        f"{self._base_url}/v1internal:retrieveUserQuota",
+                        f"{base_url.rstrip('/')}/v1internal:fetchAvailableModels",
                         headers=headers,
-                        json={"project": project_id},
+                        json={"project": project_id} if project_id else {},
                         timeout=5.0,
                     )
                     if res.status_code == 200:
                         data = res.json()
-                        buckets = data.get("quotaBuckets", []) or data.get(
-                            "buckets", []
-                        )
-                        for bucket in buckets:
-                            if isinstance(bucket, dict):
-                                model_id = (
-                                    bucket.get("modelId")
-                                    or bucket.get("model")
-                                    or bucket.get("name")
-                                )
-                                if model_id:
-                                    norm = _normalize_model_name(str(model_id))
-                                    fetched_ids.add(norm)
-                                    fetched_ids.add(f"antigravity/{norm}")
+                        models_dict = data.get("models", {})
+                        if isinstance(models_dict, dict):
+                            for model_id in models_dict:
+                                norm = _normalize_model_name(str(model_id))
+                                fetched_ids.add(norm)
+                                fetched_ids.add(f"antigravity/{norm}")
+                        sorts = data.get("agentModelSorts", [])
+                        if isinstance(sorts, list):
+                            for sort_entry in sorts:
+                                if isinstance(sort_entry, dict):
+                                    for grp in sort_entry.get("groups", []):
+                                        if isinstance(grp, dict):
+                                            for m in grp.get("modelIds", []):
+                                                norm = _normalize_model_name(str(m))
+                                                fetched_ids.add(norm)
+                                                fetched_ids.add(f"antigravity/{norm}")
+                        tiered = data.get("tieredModelIds", {})
+                        if isinstance(tiered, dict):
+                            for t_models in tiered.values():
+                                if isinstance(t_models, list):
+                                    for m in t_models:
+                                        norm = _normalize_model_name(str(m))
+                                        fetched_ids.add(norm)
+                                        fetched_ids.add(f"antigravity/{norm}")
                 except Exception as exc:
-                    logger.debug("POST retrieveUserQuota failed: %s", exc)
+                    logger.debug(
+                        "POST fetchAvailableModels failed on %s: %s", base_url, exc
+                    )
+
+            # Fallback 1: POST /v1internal:retrieveUserQuota
+            if not fetched_ids:
+                for base_url in candidate_base_urls:
+                    if fetched_ids:
+                        break
+                    try:
+                        res = await self._client.post(
+                            f"{base_url.rstrip('/')}/v1internal:retrieveUserQuota",
+                            headers=headers,
+                            json={"project": project_id},
+                            timeout=5.0,
+                        )
+                        if res.status_code == 200:
+                            data = res.json()
+                            buckets = data.get("quotaBuckets", []) or data.get(
+                                "buckets", []
+                            )
+                            for bucket in buckets:
+                                if isinstance(bucket, dict):
+                                    model_id = (
+                                        bucket.get("modelId")
+                                        or bucket.get("model")
+                                        or bucket.get("name")
+                                    )
+                                    if model_id:
+                                        norm = _normalize_model_name(str(model_id))
+                                        fetched_ids.add(norm)
+                                        fetched_ids.add(f"antigravity/{norm}")
+                    except Exception as exc:
+                        logger.debug(
+                            "POST retrieveUserQuota failed on %s: %s", base_url, exc
+                        )
 
             # Fallback 2: POST /v1internal:loadCodeAssist
             if not fetched_ids:
-                try:
-                    load_body = {
-                        "metadata": {
-                            "ideType": "ANTIGRAVITY",
-                            "platform": "PLATFORM_UNSPECIFIED",
+                for base_url in candidate_base_urls:
+                    if fetched_ids:
+                        break
+                    try:
+                        load_body = {
+                            "metadata": {
+                                "ideType": "ANTIGRAVITY",
+                                "platform": "PLATFORM_UNSPECIFIED",
+                            }
                         }
-                    }
-                    res_load = await self._client.post(
-                        f"{self._base_url}/v1internal:loadCodeAssist",
-                        headers=headers,
-                        json=load_body,
-                        timeout=5.0,
-                    )
-                    if res_load.status_code == 200:
-                        data = res_load.json()
-                        models = data.get("models", []) or data.get("allowedModels", [])
-                        for item in models:
-                            if isinstance(item, str):
-                                norm = _normalize_model_name(item)
-                                fetched_ids.add(norm)
-                                fetched_ids.add(f"antigravity/{norm}")
-                            elif isinstance(item, dict) and "name" in item:
-                                norm = _normalize_model_name(item["name"])
-                                fetched_ids.add(norm)
-                                fetched_ids.add(f"antigravity/{norm}")
-                except Exception as exc:
-                    logger.debug("POST loadCodeAssist failed: %s", exc)
+                        res_load = await self._client.post(
+                            f"{base_url.rstrip('/')}/v1internal:loadCodeAssist",
+                            headers=headers,
+                            json=load_body,
+                            timeout=5.0,
+                        )
+                        if res_load.status_code == 200:
+                            data = res_load.json()
+                            models = data.get("models", []) or data.get(
+                                "allowedModels", []
+                            )
+                            for item in models:
+                                if isinstance(item, str):
+                                    norm = _normalize_model_name(item)
+                                    fetched_ids.add(norm)
+                                    fetched_ids.add(f"antigravity/{norm}")
+                                elif isinstance(item, dict) and "name" in item:
+                                    norm = _normalize_model_name(item["name"])
+                                    fetched_ids.add(norm)
+                                    fetched_ids.add(f"antigravity/{norm}")
+                    except Exception as exc:
+                        logger.debug(
+                            "POST loadCodeAssist failed on %s: %s", base_url, exc
+                        )
 
         except Exception as exc:
             logger.debug(
@@ -591,16 +647,27 @@ class AntigravityProvider(BaseProvider):
             cli_ids = await self._fetch_model_ids_via_cli()
             fetched_ids.update(cli_ids)
 
-        # Ensure active Gemini 3.7 variants are always discoverable and supported
-        for m37 in (
+        # Ensure active Gemini and Claude aliases and models are always discoverable
+        for m_alias in (
+            "claude-3-7-sonnet",
+            "claude-3-5-sonnet",
+            "claude-3-opus",
+            "claude-3-5-haiku",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6-thinking",
+            "gemini-3.6-flash-high",
+            "gemini-3.6-flash-tiered",
+            "gemini-3.1-flash-lite",
             "gemini-3.7-flash-high",
             "gemini-3.7-flash-medium",
             "gemini-3.7-flash-low",
             "gemini-3.7-flash",
             "gemini-3.7-flash-tiered",
+            "gemini-2.5-flash",
+            "gpt-oss-120b-medium",
         ):
-            fetched_ids.add(m37)
-            fetched_ids.add(f"antigravity/{m37}")
+            fetched_ids.add(m_alias)
+            fetched_ids.add(f"antigravity/{m_alias}")
 
         return frozenset(fetched_ids)
 
@@ -715,20 +782,45 @@ class AntigravityProvider(BaseProvider):
                 thinking_enabled=thinking_enabled,
             )
 
-            url = f"{self._base_url}/v1internal:streamGenerateContent?alt=sse"
+            candidate_base_urls = [self._base_url]
+            for fb in ANTIGRAVITY_FALLBACK_BASE_URLS:
+                if fb not in candidate_base_urls:
+                    candidate_base_urls.append(fb)
 
-            async with self._client.stream(
-                "POST", url, headers=headers, json=body
-            ) as response:
-                if response.status_code != 200:
-                    await response.aread()
-                    error_text = response.text
-                    clean_msg = (
-                        _extract_error_message(error_text)
-                        or f"HTTP {response.status_code}"
+            response = None
+            last_http_error: tuple[int, str] | None = None
+
+            for base_url in candidate_base_urls:
+                url = f"{base_url.rstrip('/')}/v1internal:streamGenerateContent?alt=sse"
+                try:
+                    resp_stream = self._client.stream(
+                        "POST", url, headers=headers, json=body
                     )
-                    _raise_mapped_http_error(response.status_code, clean_msg)
+                    resp = await resp_stream.__aenter__()
+                    if resp.status_code == 200:
+                        response = resp
+                        break
+                    else:
+                        await resp.aread()
+                        err_text = resp.text
+                        clean_msg = (
+                            _extract_error_message(err_text)
+                            or f"HTTP {resp.status_code}"
+                        )
+                        last_http_error = (resp.status_code, clean_msg)
+                        await resp_stream.__aexit__(None, None, None)
+                except httpx.RequestError as exc:
+                    logger.debug("Request failed on %s: %s", base_url, exc)
+                    last_http_error = (502, str(exc))
 
+            if response is None:
+                if last_http_error:
+                    _raise_mapped_http_error(last_http_error[0], last_http_error[1])
+                raise APIError(
+                    "All Antigravity candidate endpoints failed", status_code=502
+                )
+
+            try:
                 yield ledger.message_start()
                 sent_any_event = True
 
@@ -878,6 +970,9 @@ class AntigravityProvider(BaseProvider):
                 stop_r = ledger.stop_reason or "end_turn"
                 yield ledger.message_delta(stop_r, 1)
                 yield ledger.message_stop()
+            finally:
+                if response is not None:
+                    await response.aclose()
 
         except Exception as exc:
             raw_msg = getattr(exc, "message", str(exc))

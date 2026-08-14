@@ -25,15 +25,17 @@ Maintenir le serveur proxy local free-claude-code à un niveau de qualité zéro
 - 2026-08-14: **Découverte Directe de Modèles `fetchAvailableModels`** : Remplacement des endpoints de quota obsolètes (`retrieveUserQuota`) par l'endpoint officiel `/v1internal:fetchAvailableModels` qui expose le catalogue dynamique complet des modèles Gemini (y compris Gemini 3.7 Flash).
 - 2026-08-14: **Identification Multi-Provider dans l'Admin UI** : Découplage de `connectedAccountMeta` et des boîtes de dialogue de déconnexion pour utiliser dynamiquement `display_name` et `status.email` spécifique à chaque provider.
 - 2026-08-14: **Catalogue Qwen Code sous Protocole Anthropic** : Synchronisation non destructive du catalogue complet `/v1/models` dans `~/.qwen/settings.json` sous `modelProviders.anthropic`.
-- 2026-08-14: **Factorisation HTTP Launcher** : Centralisation de `fetch_proxy_models_response` dans `src/free_claude_code/cli/launchers/common.py`.
+- 2026-08-14: **Isolation Stricte à 100% Antigravity dans `~/.fcc/`** : Suppression définitive de tout bootstrap ou fallback automatique depuis le trousseau système (Secret Service / Keyring) ou les répertoires hôtes (`~/.gemini/`). FCC s'appuie exclusivement sur `~/.fcc/auth/antigravity/oauth.json`, garantissant une indépendance totale vis-à-vis du compte de la machine hôte.
 
 ## 🌿 Active Branches / Plans
-- `plan_isolated_auth_paths` : Isolation complète des fichiers d'authentification et de comptes (Google Antigravity et Codex/OpenAI) sous `~/.fcc/auth/{provider}/` ([`.GCC/branches/plan_isolated_auth_paths.md`](file:///home/omni/free-claude-code/.GCC/branches/plan_isolated_auth_paths.md)).
+- `plan_strict_fcc_auth_isolation` : Isolation stricte à 100% de l'authentification Google Antigravity dans `~/.fcc/auth/antigravity/` sans lecture des sources hôtes ([`.GCC/branches/plan_strict_fcc_auth_isolation.md`](file:///home/omni/free-claude-code/.GCC/branches/plan_strict_fcc_auth_isolation.md)).
+- `plan_antigravity_endpoint_and_model_resolution` : Résolution de l'erreur `RESOURCE_EXHAUSTED` du provider Google Antigravity via l'endpoint actif `daily-cloudcode-pa.googleapis.com` ([`.GCC/branches/plan_antigravity_endpoint_and_model_resolution.md`](file:///home/omni/free-claude-code/.GCC/branches/plan_antigravity_endpoint_and_model_resolution.md)).
+- `plan_isolated_auth_paths` : Isolation complète des fichiers d'authentification et de comptes sous `~/.fcc/auth/{provider}/` ([`.GCC/branches/plan_isolated_auth_paths.md`](file:///home/omni/free-claude-code/.GCC/branches/plan_isolated_auth_paths.md)).
 
 ## 📈 Current Status
-- ✅ Done: Version 4.28.1 implémentée et validée (3036 tests passés, 0 warnings/erreurs).
+- ✅ Done: Version 4.28.3 implémentée, isolation stricte à 100% vérifiée, 45 tests unitaires passés, streaming en direct opérationnel.
 - 🔄 In progress: Aucun (tâche terminée avec succès).
 - ⏳ Pending: Nouveaux retours ou tâches utilisateur.
 
 ## 👉 Next Session Direction
-Le proxy et l'ensemble des 4 lanceurs CLI (`fcc-claude`, `fcc-codex`, `fcc-pi`, `fcc-qwen`) sont pleinement synchronisés et validés sur la version 4.28.1.
+Le provider Google Antigravity et l'ensemble des lanceurs fonctionnent en isolation stricte à 100% sur la version 4.28.3.

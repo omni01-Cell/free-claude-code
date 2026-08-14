@@ -2,10 +2,12 @@
 
 import asyncio
 import base64
+import importlib
 import json
 import logging
 import os
 import secrets
+import subprocess
 import time
 import urllib.parse
 import uuid
@@ -36,7 +38,11 @@ logger = logging.getLogger(__name__)
 ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.13"
 ANTIGRAVITY_CLIENT_NAME = "antigravity-cli"
 ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.13"
-ANTIGRAVITY_DEFAULT_BASE_URL = "https://cloudcode-pa.googleapis.com"
+ANTIGRAVITY_DEFAULT_BASE_URL = "https://daily-cloudcode-pa.googleapis.com"
+ANTIGRAVITY_FALLBACK_BASE_URLS = (
+    "https://daily-cloudcode-pa.googleapis.com",
+    "https://cloudcode-pa.googleapis.com",
+)
 OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEFAULT_FALLBACK_PROJECT_ID = "rising-fact-p41fc"
 
@@ -50,15 +56,8 @@ DEFAULT_ANTIGRAVITY_CLIENT_SECRET = os.environ.get(
     "GOCSPX-" + "K58FWR486LdLJ1mLB8sXC4z6qDAf",
 )
 
-# Token locations in order of priority (FCC-isolated by default)
+# Token locations (FCC-isolated)
 PRIMARY_TOKEN_PATH = antigravity_auth_path()
-LEGACY_HOST_TOKEN_PATHS = (
-    Path("~/.gemini/antigravity-cli/antigravity-oauth-token").expanduser(),
-    Path("~/.config/antigravity/oauth_token.json").expanduser(),
-    Path("~/.gemini/oauth_creds.json").expanduser(),
-    Path("~/.config/gemini/credentials.json").expanduser(),
-    Path("~/.config/gcloud/application_default_credentials.json").expanduser(),
-)
 
 
 def decode_jwt_payload(jwt_token: str) -> dict[str, Any]:
@@ -205,8 +204,140 @@ def load_token_from_file(file_path: Path | str) -> dict[str, Any] | None:
     }
 
 
+def _parse_keyring_secret(raw: str) -> dict[str, Any] | None:
+    """Parse raw JSON secret from system keyring."""
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    tok = data.get("token")
+    if isinstance(tok, dict):
+        access_token = tok.get("access_token")
+        refresh_token = tok.get("refresh_token")
+        expiry = tok.get("expiry")
+        token_type = tok.get("token_type", "Bearer")
+        auth_method = data.get("auth_method", "consumer")
+    else:
+        access_token = data.get("access_token")
+        refresh_token = data.get("refresh_token")
+        expiry = data.get("expiry") or data.get("expiry_date")
+        token_type = data.get("token_type", "Bearer")
+        auth_method = data.get("auth_method", "consumer")
+
+    if not access_token and not refresh_token:
+        return None
+
+    id_token = data.get("id_token") or (
+        tok.get("id_token") if isinstance(tok, dict) else None
+    )
+    email = data.get("email") or (tok.get("email") if isinstance(tok, dict) else None)
+    if not email and id_token:
+        claims = decode_jwt_payload(id_token)
+        if claims and claims.get("email"):
+            email = str(claims["email"])
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expiry": expiry,
+        "token_type": token_type,
+        "auth_method": auth_method,
+        "client_id": data.get("client_id") or DEFAULT_ANTIGRAVITY_CLIENT_ID,
+        "client_secret": data.get("client_secret") or DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
+        "id_token": id_token,
+        "email": email,
+        "file_path": "keyring://gemini/antigravity",
+        "_raw_data": data,
+    }
+
+
+def load_token_from_keyring() -> dict[str, Any] | None:
+    """Attempt to load active Antigravity OAuth token from system Keyring / SecretService."""
+    # 1. Try python-keyring if available
+    try:
+        keyring = importlib.import_module("keyring")
+        for svc in ("gemini", "antigravity"):
+            for usr in ("antigravity", "token", "default"):
+                raw = keyring.get_password(svc, usr)
+                if raw:
+                    parsed = _parse_keyring_secret(raw)
+                    if parsed:
+                        return parsed
+    except Exception:
+        pass
+
+    # 2. Try DBus SecretService directly via in-process dbus-python if available
+    try:
+        dbus = importlib.import_module("dbus")
+        bus = dbus.SessionBus()
+        service = bus.get_object("org.freedesktop.secrets", "/org/freedesktop/secrets")
+        secrets_iface = dbus.Interface(service, "org.freedesktop.Secret.Service")
+        session_path = secrets_iface.OpenSession("plain", "")[1]
+        collection = bus.get_object(
+            "org.freedesktop.secrets",
+            "/org/freedesktop/secrets/collection/login",
+        )
+        col_iface = dbus.Interface(collection, "org.freedesktop.Secret.Collection")
+        items = col_iface.SearchItems({"service": "gemini", "username": "antigravity"})
+        if not items:
+            items = col_iface.SearchItems({"service": "antigravity"})
+        if items:
+            item = bus.get_object("org.freedesktop.secrets", items[0])
+            item_iface = dbus.Interface(item, "org.freedesktop.Secret.Item")
+            secret = item_iface.GetSecret(session_path)
+            secret_bytes = bytes(secret[2])
+            parsed = _parse_keyring_secret(secret_bytes.decode("utf-8"))
+            if parsed:
+                return parsed
+    except Exception:
+        pass
+
+    # 3. Try host python3 with dbus if available on Linux
+    if os.path.exists("/usr/bin/python3"):
+        try:
+            py_script = (
+                "import dbus, json\n"
+                "try:\n"
+                "    bus = dbus.SessionBus()\n"
+                "    service = bus.get_object('org.freedesktop.secrets', '/org/freedesktop/secrets')\n"
+                "    secrets_iface = dbus.Interface(service, 'org.freedesktop.Secret.Service')\n"
+                "    session_path = secrets_iface.OpenSession('plain', '')[1]\n"
+                "    collection = bus.get_object('org.freedesktop.secrets', '/org/freedesktop/secrets/collection/login')\n"
+                "    col_iface = dbus.Interface(collection, 'org.freedesktop.Secret.Collection')\n"
+                "    items = col_iface.SearchItems({'service': 'gemini', 'username': 'antigravity'})\n"
+                "    if not items:\n"
+                "        items = col_iface.SearchItems({'service': 'antigravity'})\n"
+                "    if items:\n"
+                "        item = bus.get_object('org.freedesktop.secrets', items[0])\n"
+                "        item_iface = dbus.Interface(item, 'org.freedesktop.Secret.Item')\n"
+                "        secret = item_iface.GetSecret(session_path)\n"
+                "        print(bytes(secret[2]).decode('utf-8'))\n"
+                "except Exception:\n"
+                "    pass\n"
+            )
+            proc = subprocess.run(
+                ["/usr/bin/python3", "-c", py_script],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                parsed = _parse_keyring_secret(proc.stdout.strip())
+                if parsed:
+                    return parsed
+        except Exception:
+            pass
+
+    return None
+
+
 def get_candidate_token_files() -> list[Path]:
-    """Return all candidate token file paths in priority order."""
+    """Return all candidate token file paths in priority order (strictly FCC-isolated)."""
     env_path = os.environ.get("ANTIGRAVITY_TOKEN_FILE")
     candidates: list[Path] = []
     if env_path:
@@ -215,34 +346,6 @@ def get_candidate_token_files() -> list[Path]:
             candidates.append(p)
 
     fcc_path = antigravity_auth_path()
-    if fcc_path.is_file():
-        if fcc_path not in candidates:
-            candidates.append(fcc_path)
-        return candidates
-
-    # Bootstrap from host if available: seed ~/.fcc/auth/antigravity/oauth.json & google_accounts.json
-    for host_p in LEGACY_HOST_TOKEN_PATHS:
-        if host_p.is_file():
-            token_data = load_token_from_file(host_p)
-            if token_data and (
-                token_data.get("access_token") or token_data.get("refresh_token")
-            ):
-                try:
-                    fcc_path.parent.mkdir(parents=True, exist_ok=True)
-                    save_token_to_file(fcc_path, token_data)
-                    host_acc = Path("~/.gemini/google_accounts.json").expanduser()
-                    if host_acc.is_file():
-                        acc_fcc = antigravity_accounts_path()
-                        acc_fcc.parent.mkdir(parents=True, exist_ok=True)
-                        acc_fcc.write_text(
-                            host_acc.read_text(encoding="utf-8"), encoding="utf-8"
-                        )
-                    if fcc_path not in candidates:
-                        candidates.append(fcc_path)
-                    return candidates
-                except Exception as exc:
-                    logger.debug("Failed to bootstrap FCC Antigravity auth: %s", exc)
-
     if fcc_path not in candidates:
         candidates.append(fcc_path)
     return candidates
@@ -274,7 +377,7 @@ def load_antigravity_token() -> dict[str, Any]:
     if not token_file:
         raise AuthenticationError(
             f"No Antigravity token found. Please ensure {antigravity_auth_path()} "
-            "exists or ANTIGRAVITY_ACCESS_TOKEN is set in environment."
+            "exists or connect your account via Free Claude Code."
         )
 
     for candidate in get_candidate_token_files():
@@ -283,8 +386,8 @@ def load_antigravity_token() -> dict[str, Any]:
             return data
 
     raise AuthenticationError(
-        f"No Antigravity token found. Please ensure {antigravity_auth_path()} "
-        "exists or ANTIGRAVITY_ACCESS_TOKEN is set in environment."
+        f"No valid Antigravity token found in {token_file}. "
+        "Please connect your account via Free Claude Code."
     )
 
 
@@ -503,26 +606,30 @@ def load_code_assist_sync(
     base_url: str = ANTIGRAVITY_DEFAULT_BASE_URL,
 ) -> str:
     """Call v1internal:loadCodeAssist to discover cloudaicompanionProject ID synchronously."""
-    url = f"{base_url.rstrip('/')}/v1internal:loadCodeAssist"
     headers = load_code_assist_headers(access_token)
     payload = load_code_assist_body()
 
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.post(url, json=payload, headers=headers)
-        if resp.status_code == 200:
-            res_json = resp.json()
-            proj = res_json.get("cloudaicompanionProject")
-            if isinstance(proj, dict):
-                p_id = proj.get("projectId")
-                if p_id:
-                    return str(p_id)
-            elif proj and isinstance(proj, str):
-                return proj
-    except Exception as e:
-        logger.warning(
-            f"loadCodeAssist request failed: {e}. Falling back to default project."
-        )
+    candidate_urls = [base_url]
+    for fb in ANTIGRAVITY_FALLBACK_BASE_URLS:
+        if fb not in candidate_urls:
+            candidate_urls.append(fb)
+
+    for target_base in candidate_urls:
+        url = f"{target_base.rstrip('/')}/v1internal:loadCodeAssist"
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                res_json = resp.json()
+                proj = res_json.get("cloudaicompanionProject")
+                if isinstance(proj, dict):
+                    p_id = proj.get("projectId")
+                    if p_id:
+                        return str(p_id)
+                elif proj and isinstance(proj, str):
+                    return proj
+        except Exception as e:
+            logger.debug(f"loadCodeAssist request failed on {target_base}: {e}")
 
     return os.environ.get("ANTIGRAVITY_PROJECT_ID", DEFAULT_FALLBACK_PROJECT_ID)
 
@@ -532,26 +639,30 @@ async def load_code_assist_async(
     base_url: str = ANTIGRAVITY_DEFAULT_BASE_URL,
 ) -> str:
     """Call v1internal:loadCodeAssist to discover cloudaicompanionProject ID asynchronously."""
-    url = f"{base_url.rstrip('/')}/v1internal:loadCodeAssist"
     headers = load_code_assist_headers(access_token)
     payload = load_code_assist_body()
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 200:
-            res_json = resp.json()
-            proj = res_json.get("cloudaicompanionProject")
-            if isinstance(proj, dict):
-                p_id = proj.get("projectId")
-                if p_id:
-                    return str(p_id)
-            elif proj and isinstance(proj, str):
-                return proj
-    except Exception as e:
-        logger.warning(
-            f"loadCodeAssist request failed: {e}. Falling back to default project."
-        )
+    candidate_urls = [base_url]
+    for fb in ANTIGRAVITY_FALLBACK_BASE_URLS:
+        if fb not in candidate_urls:
+            candidate_urls.append(fb)
+
+    for target_base in candidate_urls:
+        url = f"{target_base.rstrip('/')}/v1internal:loadCodeAssist"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                res_json = resp.json()
+                proj = res_json.get("cloudaicompanionProject")
+                if isinstance(proj, dict):
+                    p_id = proj.get("projectId")
+                    if p_id:
+                        return str(p_id)
+                elif proj and isinstance(proj, str):
+                    return proj
+        except Exception as e:
+            logger.debug(f"loadCodeAssist async request failed on {target_base}: {e}")
 
     return os.environ.get("ANTIGRAVITY_PROJECT_ID", DEFAULT_FALLBACK_PROJECT_ID)
 
