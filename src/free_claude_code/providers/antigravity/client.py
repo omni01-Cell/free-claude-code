@@ -38,44 +38,10 @@ from free_claude_code.providers.model_listing import model_infos_from_ids
 
 logger = logging.getLogger(__name__)
 
-# Transparent mapping of Claude Code, Codex, and common client aliases to active CodeAssist model IDs
-ANTIGRAVITY_MODEL_ALIASES: dict[str, str] = {
-    # Claude mappings
-    "claude-3-7-sonnet": "claude-sonnet-4-6",
-    "claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
-    "claude-3-5-sonnet": "claude-sonnet-4-6",
-    "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
-    "claude-3-5-sonnet-20240620": "claude-sonnet-4-6",
-    "claude-3-opus": "claude-opus-4-6-thinking",
-    "claude-3-opus-20240229": "claude-opus-4-6-thinking",
-    "claude-opus-4-6": "claude-opus-4-6-thinking",
-    "claude-3-5-haiku": "gemini-3.1-flash-lite",
-    "claude-3-5-haiku-20241022": "gemini-3.1-flash-lite",
-    "claude-3-haiku": "gemini-3.1-flash-lite",
-    "claude-3-haiku-20240307": "gemini-3.1-flash-lite",
-    # Gemini aliases
-    "gemini-3.7-flash": "gemini-3.6-flash-high",
-    "gemini-3.7-flash-high": "gemini-3.6-flash-high",
-    "gemini-3.7-flash-medium": "gemini-3.6-flash-medium",
-    "gemini-3.7-flash-low": "gemini-3.6-flash-low",
-    "gemini-3.7-flash-tiered": "gemini-3.6-flash-tiered",
-    "gemini-2.5-pro": "gemini-3.6-flash-high",
-    "gemini-2.5-pro-preview": "gemini-3.6-flash-high",
-    "gemini-pro": "gemini-3.6-flash-high",
-    "gemini-flash": "gemini-3.6-flash-high",
-    # OpenAI / Codex mappings
-    "gpt-4o": "gpt-oss-120b-medium",
-    "gpt-4o-mini": "gemini-3.1-flash-lite",
-    "o1": "gpt-oss-120b-medium",
-    "o3-mini": "gemini-3.1-flash-lite",
-}
-
-
 def _normalize_model_name(model: str) -> str:
-    """Normalize model identifier by stripping prefixes and mapping known client aliases."""
+    """Normalize model identifier by stripping prefixes."""
     m = str(model).strip()
-    m = m.removeprefix("models/").removeprefix("antigravity/")
-    return ANTIGRAVITY_MODEL_ALIASES.get(m, m)
+    return m.removeprefix("models/").removeprefix("antigravity/")
 
 
 def _extract_error_message(raw_text: str) -> str:
@@ -646,28 +612,6 @@ class AntigravityProvider(BaseProvider):
         if not fetched_ids:
             cli_ids = await self._fetch_model_ids_via_cli()
             fetched_ids.update(cli_ids)
-
-        # Ensure active Gemini and Claude aliases and models are always discoverable
-        for m_alias in (
-            "claude-3-7-sonnet",
-            "claude-3-5-sonnet",
-            "claude-3-opus",
-            "claude-3-5-haiku",
-            "claude-sonnet-4-6",
-            "claude-opus-4-6-thinking",
-            "gemini-3.6-flash-high",
-            "gemini-3.6-flash-tiered",
-            "gemini-3.1-flash-lite",
-            "gemini-3.7-flash-high",
-            "gemini-3.7-flash-medium",
-            "gemini-3.7-flash-low",
-            "gemini-3.7-flash",
-            "gemini-3.7-flash-tiered",
-            "gemini-2.5-flash",
-            "gpt-oss-120b-medium",
-        ):
-            fetched_ids.add(m_alias)
-            fetched_ids.add(f"antigravity/{m_alias}")
 
         return frozenset(fetched_ids)
 

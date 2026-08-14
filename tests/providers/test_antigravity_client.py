@@ -73,9 +73,9 @@ def antigravity_provider(provider_config, mock_auth):
 
 
 def test_normalize_model_name():
-    assert _normalize_model_name("models/gemini-2.5-pro") == "gemini-3.6-flash-high"
-    assert _normalize_model_name("antigravity/claude-3-7-sonnet") == "claude-sonnet-4-6"
-    assert _normalize_model_name("claude-3-opus") == "claude-opus-4-6-thinking"
+    assert _normalize_model_name("models/gemini-2.5-pro") == "gemini-2.5-pro"
+    assert _normalize_model_name("antigravity/claude-sonnet-4-6") == "claude-sonnet-4-6"
+    assert _normalize_model_name("claude-opus-4-6-thinking") == "claude-opus-4-6-thinking"
     assert _normalize_model_name("gemini-2.5-flash") == "gemini-2.5-flash"
     assert _normalize_model_name("gemini-3.6-flash-high") == "gemini-3.6-flash-high"
 
@@ -162,8 +162,8 @@ async def test_list_model_ids(antigravity_provider):
         antigravity_provider._client, "post", AsyncMock(return_value=mock_resp)
     ):
         model_ids = await antigravity_provider.list_model_ids()
-        assert "gemini-3.6-flash-high" in model_ids
-        assert "antigravity/gemini-3.6-flash-high" in model_ids
+        assert "gemini-2.5-pro" in model_ids
+        assert "antigravity/gemini-2.5-pro" in model_ids
         assert "gemini-3.5-pro" in model_ids
 
 
@@ -609,14 +609,10 @@ async def test_antigravity_list_model_ids_fetch_available_models(antigravity_pro
         assert "gemini-3.6-flash-high" in model_ids
         assert "antigravity/gemini-3.6-flash-high" in model_ids
         assert "claude-sonnet-4-6" in model_ids
+        assert "antigravity/claude-sonnet-4-6" in model_ids
         assert "gemini-3-flash-agent" in model_ids
+        assert "gpt-oss-120b-medium" in model_ids
         assert "gemini-3.6-flash-tiered" in model_ids
-        # Always includes 3.7 variants
-        assert "gemini-3.7-flash-high" in model_ids
-        assert "antigravity/gemini-3.7-flash-high" in model_ids
-        assert "gemini-3.7-flash-medium" in model_ids
-        assert "gemini-3.7-flash-low" in model_ids
-        assert "gemini-3.7-flash" in model_ids
 
 
 @pytest.mark.asyncio
