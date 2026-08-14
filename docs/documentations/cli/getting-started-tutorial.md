@@ -96,7 +96,7 @@ Démarrez l'agent Qwen Code avec le lanceur dédié :
 fcc-qwen
 ```
 
-Le lanceur injecte les variables OpenAI (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`) pointant vers le proxy local `/v1` et démarre `qwen`.
+Le lanceur synchronise automatiquement le catalogue complet de modèles Free Claude Code dans la configuration `~/.qwen/settings.json` (rendant tous les modèles sélectionnables via `/model`), configure l'environnement proxy et démarre `qwen`.
 
 ## Ce que vous avez construit
 

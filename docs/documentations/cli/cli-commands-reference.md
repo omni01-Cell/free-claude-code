@@ -21,7 +21,7 @@ Ce document fournit la référence technique complète des exécutables CLI, des
 | `fcc-codex-desktop` | `--reset` / `--restore` | Restaure la configuration `config.toml` initiale depuis le fichier `.fccbak`. |
 | `fcc-pi` | `[passthrough]` | Redirige directement `config`, `install`, `list`, `remove`, `uninstall`, `update`, `--help`. |
 | `fcc-pi` | `[session]` | Lance `pi` avec l'extension `-e pi_extension.ts` et le scope `--models free-claude-code/**`. |
-| `fcc-qwen` | `[arguments...]` | Lance `qwen` (Qwen Code) avec les variables OpenAI (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`). |
+| `fcc-qwen` | `[arguments...]` | Lance `qwen` (Qwen Code) en synchronisant automatiquement le catalogue complet de modèles FCC dans `~/.qwen/settings.json`. |
 | `fcc-desktop` | *(aucun)* | Démarre la barre d'état système tray (Pystray) et supervise le serveur Uvicorn. |
 
 ## Variables d'environnement de la couche CLI

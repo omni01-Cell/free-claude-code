@@ -1,5 +1,5 @@
-"""Shared filesystem paths for Free Claude Code configuration."""
-
+import os
+from collections.abc import Mapping
 from pathlib import Path
 
 FCC_CONFIG_DIRNAME = ".fcc"
@@ -13,6 +13,8 @@ CODEX_MODEL_CATALOG_FILENAME = "codex-model-catalog.json"
 AUTH_DIRNAME = "auth"
 OPENAI_AUTH_FILENAME = "openai.json"
 OPENAI_AUTH_LOCK_FILENAME = "openai.lock"
+QWEN_DIRNAME = ".qwen"
+QWEN_SETTINGS_FILENAME = "settings.json"
 
 
 def config_dir_path() -> Path:
@@ -65,3 +67,19 @@ def openai_auth_lock_path() -> Path:
     """Return the cross-process lock path for ChatGPT credentials."""
 
     return config_dir_path() / AUTH_DIRNAME / OPENAI_AUTH_LOCK_FILENAME
+
+
+def qwen_dir_path(env: Mapping[str, str] | None = None) -> Path:
+    """Return the global Qwen configuration directory path."""
+
+    current_env = os.environ if env is None else env
+    if qwen_home := current_env.get("QWEN_HOME"):
+        path = Path(qwen_home).expanduser()
+        return path if path.is_absolute() else (Path.cwd() / path).resolve()
+    return Path.home() / QWEN_DIRNAME
+
+
+def qwen_settings_path(env: Mapping[str, str] | None = None) -> Path:
+    """Return the user-level Qwen settings.json path."""
+
+    return qwen_dir_path(env) / QWEN_SETTINGS_FILENAME

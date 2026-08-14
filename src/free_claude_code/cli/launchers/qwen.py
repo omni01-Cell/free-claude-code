@@ -3,22 +3,31 @@
 import os
 import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 from free_claude_code.cli.local_http import with_local_proxy_bypass
 from free_claude_code.cli.proxy_auth import proxy_auth_token
+from free_claude_code.config.paths import qwen_settings_path
 from free_claude_code.config.server_urls import local_proxy_root_url
-from free_claude_code.config.settings import get_settings
+from free_claude_code.config.settings import Settings, get_settings
 
-from .common import preflight_proxy, resolve_client_binary, run_client_process
+from .common import (
+    fetch_proxy_models_response,
+    preflight_proxy,
+    resolve_client_binary,
+    run_client_process,
+)
+from .qwen_model_catalog import build_qwen_model_catalog, sync_qwen_settings
 
 _DISPLAY_NAME = "Qwen Code"
 _DEFAULT_BINARY = "qwen"
 _INSTALL_HINT = "Install Qwen Code with: npm install -g @qwen-code/qwen-code@latest"
 _STRIPPED_QWEN_ENV_KEYS = frozenset(
     {
-        "OPENAI_API_BASE",
-        "OPENAI_ORG_ID",
-        "OPENAI_ORGANIZATION",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_MODEL",
     }
 )
 
@@ -43,6 +52,7 @@ def launch(argv: Sequence[str] | None = None) -> None:
         display_name=_DISPLAY_NAME,
         install_hint=_INSTALL_HINT,
     )
+    sync_qwen_model_catalog(proxy_root_url, settings)
     run_client_process(
         command=build_qwen_launcher_command(
             binary_path=binary_path,
@@ -58,6 +68,43 @@ def launch(argv: Sequence[str] | None = None) -> None:
         display_name=_DISPLAY_NAME,
         install_hint=_INSTALL_HINT,
     )
+
+
+def sync_qwen_model_catalog(
+    proxy_root_url: str,
+    settings: Settings,
+    *,
+    settings_path: Path | None = None,
+) -> bool:
+    """Fetch proxy models and sync to Qwen settings.json."""
+
+    try:
+        models_response = fetch_proxy_models_response(
+            proxy_root_url, settings.anthropic_auth_token
+        )
+        catalog = build_qwen_model_catalog(
+            models_response, proxy_root_url=proxy_root_url
+        )
+        if not catalog:
+            print(
+                "Free Claude Code warning: Qwen model catalog is empty; "
+                "launching with default configuration.",
+                file=sys.stderr,
+            )
+            return False
+        target_path = qwen_settings_path() if settings_path is None else settings_path
+        return sync_qwen_settings(
+            target_path,
+            catalog,
+            default_model=getattr(settings, "model", None),
+        )
+    except Exception as exc:
+        print(
+            "Free Claude Code warning: could not prepare Qwen model catalog "
+            f"({exc}); launching with default configuration.",
+            file=sys.stderr,
+        )
+        return False
 
 
 def qwen_binary_name() -> str:
@@ -83,7 +130,7 @@ def build_qwen_launcher_env(
     model: str | None = None,
     base_env: Mapping[str, str],
 ) -> dict[str, str]:
-    """Return an environment targeting the FCC OpenAI-compatible endpoint."""
+    """Return an environment targeting the FCC Anthropic Messages endpoint."""
 
     env = with_local_proxy_bypass(
         {
@@ -93,13 +140,10 @@ def build_qwen_launcher_env(
         },
         proxy_root_url=proxy_root_url,
     )
-    env["OPENAI_BASE_URL"] = _ensure_v1_url(proxy_root_url)
-    env["OPENAI_API_KEY"] = proxy_auth_token(auth_token)
+    token = proxy_auth_token(auth_token)
+    env["ANTHROPIC_BASE_URL"] = proxy_root_url.rstrip("/")
+    env["ANTHROPIC_AUTH_TOKEN"] = token
+    env["ANTHROPIC_API_KEY"] = token
     if model and model.strip():
-        env["OPENAI_MODEL"] = model.strip()
+        env["ANTHROPIC_MODEL"] = model.strip()
     return env
-
-
-def _ensure_v1_url(url: str) -> str:
-    stripped = url.rstrip("/")
-    return stripped if stripped.endswith("/v1") else f"{stripped}/v1"

@@ -579,7 +579,7 @@ def test_launch_codex_passes_responses_config_and_child_env(
             return_value=catalog_path,
         ),
         patch(
-            "free_claude_code.cli.launchers.codex.open_local_request",
+            "free_claude_code.cli.launchers.common.open_local_request",
             side_effect=fake_urlopen,
         ),
         patch("free_claude_code.cli.launchers.common.subprocess.Popen") as popen,
@@ -647,7 +647,9 @@ def test_codex_proxy_auth_command_prints_only_current_token(
         patch.object(codex, "get_settings", return_value=settings) as get_settings,
         patch.object(codex, "preflight_proxy") as preflight_proxy,
         patch.object(codex, "resolve_client_binary") as resolve_client_binary,
-        patch.object(codex, "open_local_request") as open_local_request,
+        patch.object(
+            codex, "fetch_proxy_models_response"
+        ) as fetch_proxy_models_response,
         patch.object(codex, "run_client_process") as run_client_process,
     ):
         codex.launch(["--print-proxy-auth-token"])
@@ -656,7 +658,7 @@ def test_codex_proxy_auth_command_prints_only_current_token(
     get_settings.assert_called_once_with()
     preflight_proxy.assert_not_called()
     resolve_client_binary.assert_not_called()
-    open_local_request.assert_not_called()
+    fetch_proxy_models_response.assert_not_called()
     run_client_process.assert_not_called()
 
 
@@ -684,7 +686,7 @@ def test_launch_codex_catalog_failure_warns_and_continues(
             return_value=tmp_path / "codex-model-catalog.json",
         ),
         patch(
-            "free_claude_code.cli.launchers.codex.open_local_request",
+            "free_claude_code.cli.launchers.common.open_local_request",
             side_effect=URLError("boom"),
         ),
         patch("free_claude_code.cli.launchers.common.subprocess.Popen") as popen,
@@ -1036,6 +1038,109 @@ def test_launch_claude_unreachable_proxy_exits_with_hint(
     assert "fcc-server" in captured.err
 
 
+def test_build_qwen_model_catalog_extracts_unique_anthropic_configs() -> None:
+    from free_claude_code.cli.launchers.qwen_model_catalog import (
+        build_qwen_model_catalog,
+    )
+
+    catalog = build_qwen_model_catalog(
+        {
+            "data": [
+                {
+                    "id": "anthropic/claude-3-7-sonnet",
+                    "display_name": "Claude 3.7 Sonnet",
+                },
+                {
+                    "id": "nvidia_nim/meta/llama-3.3-70b-instruct",
+                    "display_name": "Llama 3.3 70B",
+                },
+                {
+                    "id": "anthropic/claude-3-7-sonnet",
+                    "display_name": "Duplicate",
+                },
+                {"id": ""},
+                {},
+            ]
+        },
+        proxy_root_url="http://127.0.0.1:8082/",
+    )
+
+    assert catalog == [
+        {
+            "id": "anthropic/claude-3-7-sonnet",
+            "name": "Claude 3.7 Sonnet",
+            "baseUrl": "http://127.0.0.1:8082",
+            "envKey": "ANTHROPIC_API_KEY",
+            "description": "Free Claude Code provider model",
+        },
+        {
+            "id": "nvidia_nim/meta/llama-3.3-70b-instruct",
+            "name": "Llama 3.3 70B",
+            "baseUrl": "http://127.0.0.1:8082",
+            "envKey": "ANTHROPIC_API_KEY",
+            "description": "Free Claude Code provider model",
+        },
+    ]
+
+
+def test_sync_qwen_settings_preserves_user_fields_and_updates_model_providers(
+    tmp_path: Path,
+) -> None:
+    from free_claude_code.cli.launchers.qwen_model_catalog import (
+        sync_qwen_settings,
+    )
+
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "ui": {"theme": "dark", "autoModeAcknowledged": True},
+                "modelProviders": {
+                    "openai": [{"id": "custom-openai", "baseUrl": "http://custom"}],
+                },
+                "custom_plugin": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    models = [
+        {
+            "id": "anthropic/claude-3-7-sonnet",
+            "name": "Claude 3.7 Sonnet",
+            "baseUrl": "http://127.0.0.1:8082",
+            "envKey": "ANTHROPIC_API_KEY",
+            "description": "Free Claude Code provider model",
+        }
+    ]
+
+    changed = sync_qwen_settings(
+        settings_path,
+        models,
+        default_model="anthropic/claude-3-7-sonnet",
+    )
+    assert changed is True
+
+    loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert loaded["ui"] == {"theme": "dark", "autoModeAcknowledged": True}
+    assert loaded["custom_plugin"] is True
+    assert loaded["modelProviders"]["openai"] == [
+        {"id": "custom-openai", "baseUrl": "http://custom"}
+    ]
+    assert loaded["modelProviders"]["anthropic"] == models
+    assert loaded["security"]["auth"]["selectedType"] == "anthropic"
+    assert loaded["model"]["name"] == "anthropic/claude-3-7-sonnet"
+
+    assert (
+        sync_qwen_settings(
+            settings_path,
+            models,
+            default_model="anthropic/claude-3-7-sonnet",
+        )
+        is False
+    )
+
+
 def test_qwen_launcher_builds_command_and_proxy_env() -> None:
     from free_claude_code.cli.launchers.qwen import (
         build_qwen_launcher_command,
@@ -1048,10 +1153,10 @@ def test_qwen_launcher_builds_command_and_proxy_env() -> None:
         model="qwen3-coder-plus",
         base_env={
             "PATH": "keep",
-            "OPENAI_API_BASE": "https://stale.api.invalid/v1",
-            "OPENAI_ORG_ID": "stale-org",
-            "OPENAI_ORGANIZATION": "stale-org-name",
-            "OPENAI_API_KEY": "stale-key",
+            "ANTHROPIC_API_KEY": "stale-key",
+            "ANTHROPIC_AUTH_TOKEN": "stale-token",
+            "ANTHROPIC_BASE_URL": "https://stale.api.invalid",
+            "ANTHROPIC_MODEL": "stale-model",
             "KEEP_VAR": "preserved",
         },
     )
@@ -1069,9 +1174,10 @@ def test_qwen_launcher_builds_command_and_proxy_env() -> None:
         "KEEP_VAR": "preserved",
         "NO_PROXY": "127.0.0.1,localhost,::1",
         "no_proxy": "127.0.0.1,localhost,::1",
-        "OPENAI_BASE_URL": "http://127.0.0.1:9191/v1",
-        "OPENAI_API_KEY": "proxy-token",
-        "OPENAI_MODEL": "qwen3-coder-plus",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9191",
+        "ANTHROPIC_AUTH_TOKEN": "proxy-token",
+        "ANTHROPIC_API_KEY": "proxy-token",
+        "ANTHROPIC_MODEL": "qwen3-coder-plus",
     }
 
 
@@ -1085,19 +1191,36 @@ def test_qwen_launcher_uses_no_auth_sentinel_for_blank_token() -> None:
         base_env={},
     )
 
-    assert env["OPENAI_API_KEY"] == "fcc-no-auth"
-    assert env["OPENAI_BASE_URL"] == "http://127.0.0.1:8082/v1"
-    assert "OPENAI_MODEL" not in env
+    assert env["ANTHROPIC_API_KEY"] == "fcc-no-auth"
+    assert env["ANTHROPIC_AUTH_TOKEN"] == "fcc-no-auth"
+    assert env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8082"
+    assert "ANTHROPIC_MODEL" not in env
 
 
 def test_launch_qwen_passes_args_and_child_env(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     from free_claude_code.cli.launchers.qwen import launch
 
     monkeypatch.setenv("KEEP_ME", "yes")
-    monkeypatch.setenv("OPENAI_API_KEY", "stale-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "stale-key")
     settings = _launcher_settings(port=9191, token="proxy-token")
+    qwen_settings = tmp_path / ".qwen" / "settings.json"
+
+    def fake_models_response(proxy_root_url: str, auth_token: str) -> dict[str, object]:
+        return {
+            "data": [
+                {
+                    "id": "anthropic/claude-3-7-sonnet",
+                    "display_name": "Claude 3.7 Sonnet",
+                },
+                {
+                    "id": "nvidia_nim/test-model",
+                    "display_name": "NVIDIA model",
+                },
+            ]
+        }
 
     with (
         patch(
@@ -1107,6 +1230,14 @@ def test_launch_qwen_passes_args_and_child_env(
         patch(
             "free_claude_code.cli.launchers.qwen.preflight_proxy",
             return_value=None,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.qwen.fetch_proxy_models_response",
+            side_effect=fake_models_response,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.qwen.qwen_settings_path",
+            return_value=qwen_settings,
         ),
         patch(
             "free_claude_code.cli.launchers.common.shutil.which",
@@ -1125,14 +1256,23 @@ def test_launch_qwen_passes_args_and_child_env(
     assert exc_info.value.code == 0
     assert popen.call_args.args[0] == ["resolved-qwen.cmd", "--prompt", "hello"]
     child_env = popen.call_args.kwargs["env"]
-    assert child_env["OPENAI_BASE_URL"] == "http://127.0.0.1:9191/v1"
-    assert child_env["OPENAI_API_KEY"] == "proxy-token"
-    assert child_env["OPENAI_MODEL"] == "nvidia_nim/test-model"
+    assert child_env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:9191"
+    assert child_env["ANTHROPIC_AUTH_TOKEN"] == "proxy-token"
+    assert child_env["ANTHROPIC_API_KEY"] == "proxy-token"
+    assert child_env["ANTHROPIC_MODEL"] == "nvidia_nim/test-model"
     assert child_env["NO_PROXY"] == "127.0.0.1,localhost,::1"
     assert child_env["no_proxy"] == child_env["NO_PROXY"]
     assert child_env["KEEP_ME"] == "yes"
     register_pid.assert_called_once_with(12345)
     unregister_pid.assert_called_once_with(12345)
+
+    loaded_qwen = json.loads(qwen_settings.read_text(encoding="utf-8"))
+    assert loaded_qwen["security"]["auth"]["selectedType"] == "anthropic"
+    assert len(loaded_qwen["modelProviders"]["anthropic"]) == 2
+    assert [m["id"] for m in loaded_qwen["modelProviders"]["anthropic"]] == [
+        "anthropic/claude-3-7-sonnet",
+        "nvidia_nim/test-model",
+    ]
 
 
 def test_launch_qwen_exits_when_command_cannot_be_resolved(

@@ -1,5 +1,4 @@
-"""Shared process helpers for installed client CLI launchers."""
-
+import json
 import shutil
 import subprocess
 import sys
@@ -16,6 +15,27 @@ from free_claude_code.cli.process_registry import (
 
 PROXY_PREFLIGHT_PATH = "/health"
 PROXY_PREFLIGHT_TIMEOUT_SECONDS = 1.5
+
+
+def fetch_proxy_models_response(
+    proxy_root_url: str, auth_token: str
+) -> dict[str, object]:
+    """Fetch the local proxy `/v1/models` response for catalog generation."""
+
+    url = f"{proxy_root_url.rstrip('/')}/v1/models"
+    headers: dict[str, str] = {}
+    if token := auth_token.strip():
+        headers["Authorization"] = f"Bearer {token}"
+
+    request = Request(url, headers=headers, method="GET")
+    with open_local_request(
+        request, timeout=PROXY_PREFLIGHT_TIMEOUT_SECONDS
+    ) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    if not isinstance(payload, dict):
+        raise ValueError("model list response was not a JSON object")
+    return payload
 
 
 def preflight_proxy(proxy_root_url: str) -> str | None:
