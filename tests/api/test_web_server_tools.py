@@ -152,6 +152,42 @@ async def test_service_rejects_forced_server_tool_when_local_handler_is_disabled
         await service.create(request)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_id", _PROVIDER_IDS)
+async def test_service_allows_listed_server_tools_when_not_forced(
+    provider_id: str,
+):
+    """Listing web_search or web_fetch without forcing it must not raise InvalidRequestError."""
+    settings = Settings()
+    assert settings.enable_web_server_tools is False
+
+    mock_provider = MagicMock()
+    mock_provider.stream_messages = MagicMock(return_value=iter([]))
+
+    service = MessagesHandler(
+        settings,
+        provider_resolver=lambda _: mock_provider,
+        model_router=FixedProviderModelRouter(settings, provider_id),
+    )
+    request = MessagesRequest(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=100,
+        messages=[
+            Message(
+                role="user",
+                content="Hello world",
+            )
+        ],
+        tools=[
+            Tool(name="web_search", type="web_search_20250305"),
+            Tool(name="Bash", type="function"),
+        ],
+    )
+    # Should not raise InvalidRequestError
+    resp = await service.create(request)
+    assert resp is not None
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -776,13 +812,16 @@ async def test_drain_response_body_capped_stops_after_first_chunk_when_oversized
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider_id", _PROVIDER_IDS)
-async def test_service_rejects_listed_server_tools_for_every_provider(
+async def test_service_allows_listed_server_tools_for_every_provider(
     provider_id: str,
 ) -> None:
     settings = Settings()
+    mock_provider = MagicMock()
+    mock_provider.stream_messages = MagicMock(return_value=iter([]))
+
     service = MessagesHandler(
         settings,
-        provider_resolver=lambda _: MagicMock(),
+        provider_resolver=lambda _: mock_provider,
         model_router=FixedProviderModelRouter(settings, provider_id),
     )
     request = MessagesRequest(
@@ -791,5 +830,6 @@ async def test_service_rejects_listed_server_tools_for_every_provider(
         messages=[Message(role="user", content="q")],
         tools=[Tool(name="web_search", type="web_search_20250305")],
     )
-    with pytest.raises(InvalidRequestError, match="cannot pass listed Anthropic"):
-        await service.create(request)
+    # Should not raise InvalidRequestError
+    resp = await service.create(request)
+    assert resp is not None

@@ -67,10 +67,4 @@ def unsupported_server_tool_error(
             f"tool_choice forces Anthropic server tool {forced!r}, but local web server tools are "
             "disabled (ENABLE_WEB_SERVER_TOOLS=false). Enable them or remove the forced server tool."
         )
-    if not forced and has_listed_anthropic_server_tools(request):
-        return (
-            "FCC cannot pass listed Anthropic server tools (web_search / web_fetch) "
-            "to OpenAI Chat upstreams. Set ENABLE_WEB_SERVER_TOOLS=true and force the "
-            "tool with tool_choice, or remove these tools from the request."
-        )
     return None
