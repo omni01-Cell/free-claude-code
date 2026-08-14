@@ -556,7 +556,7 @@ class AntigravityProvider(BaseProvider):
         return model_infos_from_ids(await self.list_model_ids())
 
     def _build_request_headers(self, access_token: str) -> dict[str, str]:
-        """Construct exact Antigravity CLI v1.1.11 HTTP headers."""
+        """Construct exact Antigravity CLI v1.1.12 HTTP headers."""
         return {
             "User-Agent": ANTIGRAVITY_USER_AGENT,
             "X-Client-Name": ANTIGRAVITY_CLIENT_NAME,

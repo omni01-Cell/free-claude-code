@@ -12,6 +12,7 @@ FCC_COMMANDS = (
     "fcc-claude",
     "fcc-codex",
     "fcc-pi",
+    "fcc-qwen",
     "fcc-init",
     "free-claude-code",
 )
@@ -153,7 +154,7 @@ if [ "${1:-}" = "tool" ] && [ "${2:-}" = "uninstall" ]; then
         echo 'Tool `free-claude-code` is not installed' >&2
         exit 2
     fi
-    for name in fcc-desktop fcc-server fcc-claude fcc-codex fcc-pi fcc-init free-claude-code; do
+    for name in fcc-desktop fcc-server fcc-claude fcc-codex fcc-pi fcc-qwen fcc-init free-claude-code; do
         /bin/rm -f "$FAKE_TOOL_BIN/$name"
     done
     echo "Uninstalled free-claude-code"

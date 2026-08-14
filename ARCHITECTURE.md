@@ -215,6 +215,7 @@ Console scripts are registered in [pyproject.toml](pyproject.toml):
 - `fcc-claude` calls `free_claude_code.cli.launchers.claude:launch`.
 - `fcc-codex` calls `free_claude_code.cli.launchers.codex:launch`.
 - `fcc-pi` calls `free_claude_code.cli.launchers.pi:launch`.
+- `fcc-qwen` calls `free_claude_code.cli.launchers.qwen:launch`.
 
 [scripts/install.sh](scripts/install.sh) and [scripts/install.ps1](scripts/install.ps1)
 install or update the uv tool plus optional voice extras. On Windows the

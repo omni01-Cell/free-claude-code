@@ -7,13 +7,13 @@ Type = Tutorial.
 
 # Démarrer avec Free Claude Code et ses lanceurs CLI
 
-Dans ce tutoriel, vous allez démarrer le serveur proxy local Free Claude Code et exécuter une session interactive avec les trois lanceurs d'agents principaux : `fcc-claude`, `fcc-codex` et `fcc-pi`. À la fin de ce guide, vous aurez un proxy actif et trois agents connectés à votre fournisseur IA.
+Dans ce tutoriel, vous allez démarrer le serveur proxy local Free Claude Code et exécuter une session interactive avec les lanceurs d'agents principaux : `fcc-claude`, `fcc-codex`, `fcc-pi` et `fcc-qwen`. À la fin de ce guide, vous aurez un proxy actif et vos agents connectés à votre fournisseur IA.
 
 ## Prérequis
 
 - Python 3.14.0 ou plus récent installé avec `uv`
 - Le paquet `free-claude-code` installé (`uv pip install -e .`)
-- Au moins un binaire client installé (`claude`, `codex` ou `pi`)
+- Au moins un binaire client installé (`claude`, `codex`, `pi` ou `qwen`)
 - Un terminal ouvert
 
 ## Étape 1 — Démarrer le serveur proxy
@@ -88,9 +88,19 @@ Interrogez l'agent :
 
 L'agent Pi répond via le canal proxy établi.
 
+## Étape 5 — Lancer une session avec Qwen Code
+
+Démarrez l'agent Qwen Code avec le lanceur dédié :
+
+```bash
+fcc-qwen
+```
+
+Le lanceur injecte les variables OpenAI (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`) pointant vers le proxy local `/v1` et démarre `qwen`.
+
 ## Ce que vous avez construit
 
-Vous avez démarré le serveur proxy `fcc-server` sur le port 8082 et lancé avec succès trois agents CLI différents (`fcc-claude`, `fcc-codex`, `fcc-pi`) pointant tous de manière transparente vers le même proxy local.
+Vous avez démarré le serveur proxy `fcc-server` sur le port 8082 et lancé avec succès vos agents CLI (`fcc-claude`, `fcc-codex`, `fcc-pi`, `fcc-qwen`) pointant tous de manière transparente vers le même proxy local.
 
 ## Prochaines étapes
 

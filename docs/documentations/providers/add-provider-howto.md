@@ -59,13 +59,25 @@ class NewProvider(BaseProvider):
 
 ### 3. Enregistrer l'Adaptateur dans la Factory Runtime
 
-Ouvrez `src/free_claude_code/providers/runtime/factory.py` et ajoutez le créateur d'adaptateur pour `"newprovider"` dans la fonction `create_provider()` :
+Ouvrez `src/free_claude_code/providers/runtime/factory.py`. Au chargement du module, `factory.py` valide l'exhaustivité du catalogue (`PROVIDER_CATALOG`) en s'assurant que chaque provider est enregistré dans `_SPECIAL_PROVIDER_FACTORIES`, `OPENAI_CHAT_PROFILES` ou `_INJECTED_PROVIDER_IDS`.
+
+Ajoutez la fonction d'instanciation et enregistrez le provider dans `_SPECIAL_PROVIDER_FACTORIES` (ou dans `OPENAI_CHAT_PROFILES` s'il s'agit d'un profil OpenAI Chat standard) :
 
 ```python
-if provider_id == "newprovider":
+def _create_newprovider(
+    config: ProviderConfig,
+    _settings: Settings,
+    admission: ProviderAdmissionController,
+) -> BaseProvider:
     from free_claude_code.providers.newprovider.client import NewProvider
 
-    return NewProvider(config)
+    return NewProvider(config, admission=admission)
+
+
+_SPECIAL_PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
+    ...
+    "newprovider": _create_newprovider,
+}
 ```
 
 ### 4. Mapper les Erreurs Spécifiques

@@ -9,7 +9,7 @@ Welcome to the official documentation for **Free Claude Code (FCC)**. This proje
 The codebase is organized into four core domains under `src/free_claude_code/`:
 
 - **API & Application (`src/free_claude_code/api/`, `application/`)**: FastAPI web server, endpoint routing (`/v1/messages`, `/v1/responses`, `/admin`), SSE stream translation, and web search/fetch server tools.
-- **CLI & Launchers (`src/free_claude_code/cli/`, `config/settings.py`)**: Entrypoints (`fcc-server`, `fcc-claude`, `fcc-codex`, `fcc-pi`), tray application, and hybrid ephemeral desktop launcher (`fcc-codex-desktop`).
+- **CLI & Launchers (`src/free_claude_code/cli/`, `config/settings.py`)**: Entrypoints (`fcc-server`, `fcc-claude`, `fcc-codex`, `fcc-pi`, `fcc-qwen`), tray application, and hybrid ephemeral desktop launcher (`fcc-codex-desktop`).
 - **AI Providers & Catalog (`src/free_claude_code/providers/`, `config/provider_catalog.py`)**: Provider abstractions, Google Antigravity OAuth 2.0 PKCE, tool call sanitation, reasoning effort policy, and SSE adapters.
 - **Core, Messaging & Runtime (`src/free_claude_code/core/`, `messaging/`, `runtime/`)**: SDK-free canonical error handling, messaging tree queues (`TreeQueueManager`), and provider runtime leases (`ProviderRuntime`).
 
@@ -27,7 +27,7 @@ This documentation suite is structured into four distinct domains:
 
 ### 2. CLI & Desktop Integration (`docs/cli/`)
 * **[CLI Domain Index](cli/index.md)**: Overview of CLI entrypoints and launchers.
-* **[Getting Started with Coding Agents](cli/getting-started-tutorial.md)** *(Tutorial)*: Step-by-step tutorial for starting `fcc-server`, `fcc-claude`, `fcc-codex`, and `fcc-pi`.
+* **[Getting Started with Coding Agents](cli/getting-started-tutorial.md)** *(Tutorial)*: Step-by-step tutorial for starting `fcc-server`, `fcc-claude`, `fcc-codex`, `fcc-pi`, and `fcc-qwen`.
 * **[Launching Codex Desktop](cli/codex-desktop-howto.md)** *(How-to Guide)*: Guide for using `fcc-codex-desktop` with automatic TOML configuration.
 * **[CLI Commands & Settings Reference](cli/cli-commands-reference.md)** *(Reference)*: Technical reference of CLI flags, environment variables, and configuration keys.
 

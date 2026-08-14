@@ -50,14 +50,15 @@ Le dossier `src/free_claude_code/cli/` est structuré en trois niveaux de respon
 
 ## Exécutables déclarés dans `pyproject.toml`
 
-La configuration du paquet définit six binaires CLI et GUI :
+La configuration du paquet définit sept binaires CLI et GUI :
 
 1. **`fcc-server`** : Démarre et supervise le serveur proxy HTTP local Uvicorn.
 2. **`fcc-claude`** : Injecte les variables `ANTHROPIC_BASE_URL` et lance le binaire `claude`.
 3. **`fcc-codex`** : Injecte les arguments `-c` TOML éphémères et lance `codex`.
 4. **`fcc-codex-desktop`** : Injecte la configuration éphémère dans `~/.codex/config.toml` et lance l'application Codex Desktop.
 5. **`fcc-pi`** : Charge l'extension TypeScript intégrée `pi_extension.ts` et démarre `pi`.
-6. **`fcc-desktop`** : Lance le serveur proxy en tâche de fond avec une icône dans la zone de notification.
+6. **`fcc-qwen`** : Injecte les variables OpenAI (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`) et lance `qwen` (Qwen Code).
+7. **`fcc-desktop`** : Lance le serveur proxy en tâche de fond avec une icône dans la zone de notification.
 
 ## Analyse comparative des mécanismes de lancement
 
@@ -67,3 +68,4 @@ La configuration du paquet définit six binaires CLI et GUI :
 | `fcc-codex` | Arguments CLI `-c` dynamiques | Aucun état résiduel sur le disque |
 | `fcc-codex-desktop` | Injection temporaire dans `config.toml` | Restauration garantie via context manager `ephemeral_codex_config` |
 | `fcc-pi` | Argument `-e` pour extension TS | Restauration de l'environnement de processus |
+| `fcc-qwen` | Variables d'environnement de processus (`OPENAI_BASE_URL`) | Automatique à la fermeture du sous-processus |

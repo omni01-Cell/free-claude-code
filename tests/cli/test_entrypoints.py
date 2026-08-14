@@ -94,6 +94,7 @@ def test_cli_scripts_are_registered() -> None:
         "fcc-codex": "free_claude_code.cli.launchers.codex:launch",
         "fcc-codex-desktop": "free_claude_code.cli.launchers.codex_desktop:launch",
         "fcc-pi": "free_claude_code.cli.launchers.pi:launch",
+        "fcc-qwen": "free_claude_code.cli.launchers.qwen:launch",
     }
     assert pyproject["project"]["gui-scripts"] == {
         "fcc-desktop": "free_claude_code.cli.desktop_entrypoint:launch",
@@ -1032,4 +1033,158 @@ def test_launch_claude_unreachable_proxy_exits_with_hint(
     popen.assert_not_called()
     captured = capsys.readouterr()
     assert "http://127.0.0.1:9393" in captured.err
+    assert "fcc-server" in captured.err
+
+
+def test_qwen_launcher_builds_command_and_proxy_env() -> None:
+    from free_claude_code.cli.launchers.qwen import (
+        build_qwen_launcher_command,
+        build_qwen_launcher_env,
+    )
+
+    env = build_qwen_launcher_env(
+        proxy_root_url="http://127.0.0.1:9191/",
+        auth_token=" proxy-token ",
+        model="qwen3-coder-plus",
+        base_env={
+            "PATH": "keep",
+            "OPENAI_API_BASE": "https://stale.api.invalid/v1",
+            "OPENAI_ORG_ID": "stale-org",
+            "OPENAI_ORGANIZATION": "stale-org-name",
+            "OPENAI_API_KEY": "stale-key",
+            "KEEP_VAR": "preserved",
+        },
+    )
+
+    assert build_qwen_launcher_command(
+        binary_path="resolved-qwen.cmd",
+        argv=["--prompt", "hello"],
+    ) == [
+        "resolved-qwen.cmd",
+        "--prompt",
+        "hello",
+    ]
+    assert env == {
+        "PATH": "keep",
+        "KEEP_VAR": "preserved",
+        "NO_PROXY": "127.0.0.1,localhost,::1",
+        "no_proxy": "127.0.0.1,localhost,::1",
+        "OPENAI_BASE_URL": "http://127.0.0.1:9191/v1",
+        "OPENAI_API_KEY": "proxy-token",
+        "OPENAI_MODEL": "qwen3-coder-plus",
+    }
+
+
+def test_qwen_launcher_uses_no_auth_sentinel_for_blank_token() -> None:
+    from free_claude_code.cli.launchers.qwen import build_qwen_launcher_env
+
+    env = build_qwen_launcher_env(
+        proxy_root_url="http://127.0.0.1:8082",
+        auth_token="",
+        model=None,
+        base_env={},
+    )
+
+    assert env["OPENAI_API_KEY"] == "fcc-no-auth"
+    assert env["OPENAI_BASE_URL"] == "http://127.0.0.1:8082/v1"
+    assert "OPENAI_MODEL" not in env
+
+
+def test_launch_qwen_passes_args_and_child_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from free_claude_code.cli.launchers.qwen import launch
+
+    monkeypatch.setenv("KEEP_ME", "yes")
+    monkeypatch.setenv("OPENAI_API_KEY", "stale-key")
+    settings = _launcher_settings(port=9191, token="proxy-token")
+
+    with (
+        patch(
+            "free_claude_code.cli.launchers.qwen.get_settings",
+            return_value=settings,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.qwen.preflight_proxy",
+            return_value=None,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.common.shutil.which",
+            return_value="resolved-qwen.cmd",
+        ),
+        patch("free_claude_code.cli.launchers.common.subprocess.Popen") as popen,
+        patch("free_claude_code.cli.launchers.common.register_pid") as register_pid,
+        patch("free_claude_code.cli.launchers.common.unregister_pid") as unregister_pid,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        process = popen.return_value
+        process.pid = 12345
+        process.wait.return_value = 0
+        launch(["--prompt", "hello"])
+
+    assert exc_info.value.code == 0
+    assert popen.call_args.args[0] == ["resolved-qwen.cmd", "--prompt", "hello"]
+    child_env = popen.call_args.kwargs["env"]
+    assert child_env["OPENAI_BASE_URL"] == "http://127.0.0.1:9191/v1"
+    assert child_env["OPENAI_API_KEY"] == "proxy-token"
+    assert child_env["OPENAI_MODEL"] == "nvidia_nim/test-model"
+    assert child_env["NO_PROXY"] == "127.0.0.1,localhost,::1"
+    assert child_env["no_proxy"] == child_env["NO_PROXY"]
+    assert child_env["KEEP_ME"] == "yes"
+    register_pid.assert_called_once_with(12345)
+    unregister_pid.assert_called_once_with(12345)
+
+
+def test_launch_qwen_exits_when_command_cannot_be_resolved(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from free_claude_code.cli.launchers.qwen import launch
+
+    settings = _launcher_settings()
+    with (
+        patch(
+            "free_claude_code.cli.launchers.qwen.get_settings",
+            return_value=settings,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.qwen.preflight_proxy",
+            return_value=None,
+        ),
+        patch("free_claude_code.cli.launchers.common.shutil.which", return_value=None),
+        patch("free_claude_code.cli.launchers.common.subprocess.Popen") as popen,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        launch([])
+
+    assert exc_info.value.code == 127
+    popen.assert_not_called()
+    captured = capsys.readouterr()
+    assert "Could not find Qwen Code command: qwen" in captured.err
+    assert "npm install -g @qwen-code/qwen-code@latest" in captured.err
+
+
+def test_launch_qwen_unreachable_proxy_exits_with_hint(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from free_claude_code.cli.launchers.qwen import launch
+
+    settings = _launcher_settings(port=9494)
+    with (
+        patch(
+            "free_claude_code.cli.launchers.qwen.get_settings",
+            return_value=settings,
+        ),
+        patch(
+            "free_claude_code.cli.launchers.qwen.preflight_proxy",
+            return_value="connection refused",
+        ),
+        patch("free_claude_code.cli.launchers.common.subprocess.Popen") as popen,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        launch([])
+
+    assert exc_info.value.code == 1
+    popen.assert_not_called()
+    captured = capsys.readouterr()
+    assert "http://127.0.0.1:9494" in captured.err
     assert "fcc-server" in captured.err

@@ -27,10 +27,10 @@ from free_claude_code.providers.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
-# Fingerprint Constants (Antigravity CLI v1.1.11)
-ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.11"
+# Fingerprint Constants (Antigravity CLI v1.1.12)
+ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.12"
 ANTIGRAVITY_CLIENT_NAME = "antigravity-cli"
-ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.11"
+ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.12"
 ANTIGRAVITY_DEFAULT_BASE_URL = "https://cloudcode-pa.googleapis.com"
 OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEFAULT_FALLBACK_PROJECT_ID = "rising-fact-p41fc"
@@ -379,7 +379,7 @@ def save_token_to_file(file_path: Path | str, token_data: dict[str, Any]) -> boo
 
 
 def load_code_assist_headers(access_token: str) -> dict[str, str]:
-    """Construct exact Antigravity CLI v1.1.11 HTTP headers."""
+    """Construct exact Antigravity CLI v1.1.12 HTTP headers."""
     return {
         "User-Agent": ANTIGRAVITY_USER_AGENT,
         "X-Client-Name": ANTIGRAVITY_CLIENT_NAME,
