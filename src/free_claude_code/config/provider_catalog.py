@@ -404,7 +404,7 @@ PROVIDER_CATALOG: dict[str, ProviderDescriptor] = {
     ),
     "antigravity": ProviderDescriptor(
         provider_id="antigravity",
-        display_name="Google Antigravity CLI",
+        display_name="Google Antigravity",
         auth_kind=ProviderAuthKind.CONNECTED_ACCOUNT,
         default_base_url=ANTIGRAVITY_DEFAULT_BASE,
         proxy_attr="antigravity_proxy",

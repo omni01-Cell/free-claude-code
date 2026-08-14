@@ -53,7 +53,7 @@ Le catalogue recense plus de 20 fournisseurs classés par catégories d'accès :
 
 | Provider ID | Nom d'affichage | Auth Kind | Base URL par défaut |
 | :--- | :--- | :--- | :--- |
-| `antigravity` | Google Antigravity CLI | `connected_account` | `https://cloudcode-pa.googleapis.com` |
+| `antigravity` | Google Antigravity | `connected_account` | `https://cloudcode-pa.googleapis.com` |
 | `openai` | OpenAI / ChatGPT Codex | `connected_account` | `https://chatgpt.com/backend-api/codex` |
 
 ### 3. Adaptateurs Generiques Compatible

@@ -577,3 +577,68 @@ def test_convert_anthropic_tool_result_error():
     assert fn_resp["name"] == "run_command"
     assert fn_resp["response"]["error"] == "Command not found: invalid"
     assert fn_resp["response"]["output"] == "Command not found: invalid"
+
+
+@pytest.mark.asyncio
+async def test_antigravity_list_model_ids_fetch_available_models(antigravity_provider):
+    mock_payload = {
+        "models": {
+            "gemini-3.6-flash-high": {"displayName": "Gemini 3.6 Flash (High)"},
+            "claude-sonnet-4-6": {"displayName": "Claude Sonnet 4.6 (Thinking)"},
+        },
+        "agentModelSorts": [
+            {"groups": [{"modelIds": ["gemini-3-flash-agent", "gpt-oss-120b-medium"]}]}
+        ],
+        "tieredModelIds": {
+            "flash": ["gemini-3.6-flash-tiered"],
+        },
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json = MagicMock(return_value=mock_payload)
+
+    with patch.object(
+        antigravity_provider._client, "post", new_callable=AsyncMock
+    ) as mock_post:
+        mock_post.return_value = mock_resp
+        model_ids = await antigravity_provider.list_model_ids()
+
+        assert "gemini-3.6-flash-high" in model_ids
+        assert "antigravity/gemini-3.6-flash-high" in model_ids
+        assert "claude-sonnet-4-6" in model_ids
+        assert "gemini-3-flash-agent" in model_ids
+        assert "gemini-3.6-flash-tiered" in model_ids
+        # Always includes 3.7 variants
+        assert "gemini-3.7-flash-high" in model_ids
+        assert "antigravity/gemini-3.7-flash-high" in model_ids
+        assert "gemini-3.7-flash-medium" in model_ids
+        assert "gemini-3.7-flash-low" in model_ids
+        assert "gemini-3.7-flash" in model_ids
+
+
+@pytest.mark.asyncio
+async def test_antigravity_list_model_ids_fallback_cli(antigravity_provider):
+    # Simulate API failure, fallback to CLI
+    mock_err_resp = MagicMock()
+    mock_err_resp.status_code = 500
+
+    with (
+        patch.object(
+            antigravity_provider._client, "post", new_callable=AsyncMock
+        ) as mock_post,
+        patch.object(
+            antigravity_provider,
+            "_fetch_model_ids_via_cli",
+            new_callable=AsyncMock,
+            return_value=frozenset(
+                {"gemini-3.6-flash-low", "antigravity/gemini-3.6-flash-low"}
+            ),
+        ),
+    ):
+        mock_post.return_value = mock_err_resp
+        model_ids = await antigravity_provider.list_model_ids()
+
+        assert "gemini-3.6-flash-low" in model_ids
+        assert "antigravity/gemini-3.6-flash-low" in model_ids
+        assert "gemini-3.7-flash-high" in model_ids

@@ -3,7 +3,7 @@
 2. Le lecteur découvre l'organisation interne du fournisseur Google Antigravity dans Free Claude Code (Apprentissage initial / Learning for the first time).
 Type = Explanation. -->
 
-# Architecture de Google Antigravity CLI
+# Architecture de Google Antigravity
 
 ## 1. Problématique & Contexte
 
@@ -11,7 +11,7 @@ Le fournisseur Google Antigravity (`src/free_claude_code/providers/antigravity/`
 
 Contrairement aux API d'IA traditionnelles basées sur des clés d'API statiques, Google Antigravity impose :
 1. Une authentification OAuth 2.0 PKCE dynamique liée à un profil d'utilisation IDE.
-2. Une empreinte d'en-tête HTTP stricte imitant le Language Server Google Cloud Code (`AntigravityCLI/1.1.12`).
+2. Une empreinte d'en-tête HTTP stricte imitant le Language Server Google Cloud Code (`AntigravityCLI/1.1.13`).
 3. Un assainissement strict des schémas JSON Schema Draft-07 (interdisant `$schema`, `const`, `propertyNames`).
 4. Un format Server-Sent Events (SSE) nécessitant la déduplication d'outils et le support des blocs de réflexion (*thinking*) multi-tours avec signatures.
 
@@ -35,7 +35,7 @@ Contrairement aux API d'IA traditionnelles basées sur des clés d'API statiques
    │      Lit le token Google OAuth dans `~/.gemini/antigravity-cli/antigravity-oauth-token`
    │
    ├── B. Conversion Anthropic ➔ Google Gemini:
-   │      - En-têtes d'Empreinte: User-Agent "AntigravityCLI/1.1.12", Client-Name "antigravity-cli"
+   │      - En-têtes d'Empreinte: User-Agent "AntigravityCLI/1.1.13", Client-Name "antigravity-cli"
    │      - Assainissement d'Outils: `_clean_gemini_schema` (supprime $schema, const, propertyNames, exclusiveMinimum)
    │      - Conversion de l'Historique: Transforme le thinking précédent en `{"thought": true, "text": "..."}`
    │      - Support Multi-Tours: Injection de `thought_signature` et `functionCall` / `functionResponse`
@@ -88,9 +88,9 @@ L'authentification s’appuie sur le composant `AntigravityAuth` (`auth.py`) ave
 Le Language Server Google Antigravity (`language_server_pb`) communique avec les serveurs Google via des en-têtes d'empreinte stricts. Dans `free-claude-code`, cette empreinte est reproduite exactement via `httpx` (`client.py`) :
 
 ```python
-ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.12"
+ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.13"
 ANTIGRAVITY_CLIENT_NAME = "antigravity-cli"
-ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.12"
+ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.13"
 
 headers = {
     "Authorization": f"Bearer {access_token}",

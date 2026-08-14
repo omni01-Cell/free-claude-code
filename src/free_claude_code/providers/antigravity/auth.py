@@ -9,6 +9,7 @@ import secrets
 import time
 import urllib.parse
 import uuid
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -27,10 +28,10 @@ from free_claude_code.providers.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
-# Fingerprint Constants (Antigravity CLI v1.1.12)
-ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.12"
+# Fingerprint Constants (Antigravity CLI v1.1.13)
+ANTIGRAVITY_USER_AGENT = "AntigravityCLI/1.1.13"
 ANTIGRAVITY_CLIENT_NAME = "antigravity-cli"
-ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.12"
+ANTIGRAVITY_GOOG_API_CLIENT = "gl-go/1.22.0 gd/1.1.13"
 ANTIGRAVITY_DEFAULT_BASE_URL = "https://cloudcode-pa.googleapis.com"
 OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEFAULT_FALLBACK_PROJECT_ID = "rising-fact-p41fc"
@@ -170,10 +171,17 @@ def load_token_from_file(file_path: Path | str) -> dict[str, Any] | None:
     client_secret = token_data.get("client_secret") or raw.get("client_secret")
 
     id_token = token_data.get("id_token") or raw.get("id_token")
+    email = token_data.get("email") or raw.get("email")
     if not client_id and id_token:
         jwt_payload = decode_jwt_payload(id_token)
         if jwt_payload and isinstance(jwt_payload, dict):
             client_id = jwt_payload.get("azp") or jwt_payload.get("aud")
+            if not email:
+                email = jwt_payload.get("email")
+    elif id_token and not email:
+        jwt_payload = decode_jwt_payload(id_token)
+        if jwt_payload and isinstance(jwt_payload, dict):
+            email = jwt_payload.get("email")
 
     return {
         "access_token": access_token,
@@ -183,6 +191,8 @@ def load_token_from_file(file_path: Path | str) -> dict[str, Any] | None:
         "auth_method": auth_method,
         "client_id": client_id,
         "client_secret": client_secret,
+        "id_token": id_token,
+        "email": email,
         "file_path": str(p),
         "_raw_data": raw,
     }
@@ -255,6 +265,54 @@ def load_antigravity_token() -> dict[str, Any]:
         "No Antigravity CLI token found. Please ensure ~/.gemini/antigravity-cli/antigravity-oauth-token "
         "exists or ANTIGRAVITY_ACCESS_TOKEN is set in environment."
     )
+
+
+def get_antigravity_account_email(
+    token_data: Mapping[str, Any] | None = None,
+) -> str | None:
+    """Resolve the active Google account email for Antigravity from token data or local discovery."""
+    if token_data:
+        if email := token_data.get("email"):
+            return str(email)
+        if id_token := token_data.get("id_token"):
+            claims = decode_jwt_payload(id_token)
+            if claims and claims.get("email"):
+                return str(claims["email"])
+        raw = token_data.get("_raw_data")
+        if isinstance(raw, dict):
+            if email := raw.get("email"):
+                return str(email)
+            if id_token := raw.get("id_token") or (
+                raw.get("token") if isinstance(raw.get("token"), dict) else {}
+            ).get("id_token"):
+                claims = decode_jwt_payload(id_token)
+                if claims and claims.get("email"):
+                    return str(claims["email"])
+
+    acc_path = Path("~/.gemini/google_accounts.json").expanduser()
+    if acc_path.is_file():
+        try:
+            with open(acc_path, encoding="utf-8") as f:
+                acc_data = json.load(f)
+            if isinstance(acc_data, dict) and acc_data.get("active"):
+                return str(acc_data["active"])
+        except Exception:
+            pass
+
+    for candidate in get_candidate_token_files():
+        try:
+            cand_data = load_token_from_file(candidate)
+            if cand_data:
+                if email := cand_data.get("email"):
+                    return str(email)
+                if id_token := cand_data.get("id_token"):
+                    claims = decode_jwt_payload(id_token)
+                    if claims and claims.get("email"):
+                        return str(claims["email"])
+        except Exception:
+            pass
+
+    return None
 
 
 def refresh_oauth_token_sync(
@@ -379,7 +437,7 @@ def save_token_to_file(file_path: Path | str, token_data: dict[str, Any]) -> boo
 
 
 def load_code_assist_headers(access_token: str) -> dict[str, str]:
-    """Construct exact Antigravity CLI v1.1.12 HTTP headers."""
+    """Construct exact Antigravity CLI v1.1.13 HTTP headers."""
     return {
         "User-Agent": ANTIGRAVITY_USER_AGENT,
         "X-Client-Name": ANTIGRAVITY_CLIENT_NAME,
@@ -885,13 +943,10 @@ class AntigravityAuthManager:
         email: str | None = None
         if connected:
             try:
-                data = (
-                    load_token_from_file(self._token_path) or load_antigravity_token()
+                data = load_token_from_file(self._token_path) or (
+                    load_antigravity_token() if not self._explicit_token_path else None
                 )
-                id_token = data.get("id_token")
-                if id_token:
-                    claims = decode_jwt_payload(id_token)
-                    email = claims.get("email")
+                email = get_antigravity_account_email(data)
             except Exception:
                 pass
 
@@ -1029,6 +1084,13 @@ class AntigravityAuthManager:
         expires_in = token_json.get("expires_in", 3600)
         expiry_timestamp = time.time() + float(expires_in)
 
+        id_token = token_json.get("id_token")
+        email: str | None = token_json.get("email")
+        if not email and id_token:
+            claims = decode_jwt_payload(id_token)
+            if claims and claims.get("email"):
+                email = str(claims["email"])
+
         save_payload = {
             "access_token": access_token,
             "refresh_token": refresh_token,
@@ -1040,7 +1102,8 @@ class AntigravityAuthManager:
             "auth_method": "consumer",
             "client_id": DEFAULT_ANTIGRAVITY_CLIENT_ID,
             "client_secret": DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
-            "id_token": token_json.get("id_token"),
+            "id_token": id_token,
+            "email": email,
         }
         save_token_to_file(self._token_path, save_payload)
 

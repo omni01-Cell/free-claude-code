@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import uuid
 from collections.abc import AsyncIterator
@@ -462,12 +463,10 @@ class AntigravityProvider(BaseProvider):
             stdout, _ = await proc.communicate()
             out = stdout.decode("utf-8", errors="ignore")
             for line in out.splitlines():
-                line = line.strip()
-                if (
-                    line
-                    and not line.startswith("⠋")
-                    and not line.startswith("Fetching")
-                ):
+                line = re.sub(
+                    r"^[\s⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏Fetchingavailablemodels\.]+", "", line
+                ).strip()
+                if line:
                     parts = line.split()
                     if parts:
                         norm = _normalize_model_name(parts[0])
@@ -486,77 +485,131 @@ class AntigravityProvider(BaseProvider):
             project_id = await self._auth.get_project_id_async()
             headers = self._build_request_headers(access_token)
 
+            # Primary: POST /v1internal:fetchAvailableModels
             try:
                 res = await self._client.post(
-                    f"{self._base_url}/v1internal:retrieveUserQuota",
+                    f"{self._base_url}/v1internal:fetchAvailableModels",
                     headers=headers,
-                    json={"project": project_id},
+                    json={"project": project_id} if project_id else {},
                     timeout=5.0,
                 )
                 if res.status_code == 200:
                     data = res.json()
-                    buckets = data.get("quotaBuckets", []) or data.get("buckets", [])
-                    for bucket in buckets:
-                        if isinstance(bucket, dict):
-                            model_id = (
-                                bucket.get("modelId")
-                                or bucket.get("model")
-                                or bucket.get("name")
-                            )
-                            if model_id:
-                                norm = _normalize_model_name(str(model_id))
+                    models_dict = data.get("models", {})
+                    if isinstance(models_dict, dict):
+                        for model_id in models_dict:
+                            norm = _normalize_model_name(str(model_id))
+                            fetched_ids.add(norm)
+                            fetched_ids.add(f"antigravity/{norm}")
+                    sorts = data.get("agentModelSorts", [])
+                    if isinstance(sorts, list):
+                        for sort_entry in sorts:
+                            if isinstance(sort_entry, dict):
+                                for grp in sort_entry.get("groups", []):
+                                    if isinstance(grp, dict):
+                                        for m in grp.get("modelIds", []):
+                                            norm = _normalize_model_name(str(m))
+                                            fetched_ids.add(norm)
+                                            fetched_ids.add(f"antigravity/{norm}")
+                    tiered = data.get("tieredModelIds", {})
+                    if isinstance(tiered, dict):
+                        for t_models in tiered.values():
+                            if isinstance(t_models, list):
+                                for m in t_models:
+                                    norm = _normalize_model_name(str(m))
+                                    fetched_ids.add(norm)
+                                    fetched_ids.add(f"antigravity/{norm}")
+            except Exception as exc:
+                logger.debug("POST fetchAvailableModels failed: %s", exc)
+
+            # Fallback 1: POST /v1internal:retrieveUserQuota
+            if not fetched_ids:
+                try:
+                    res = await self._client.post(
+                        f"{self._base_url}/v1internal:retrieveUserQuota",
+                        headers=headers,
+                        json={"project": project_id},
+                        timeout=5.0,
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        buckets = data.get("quotaBuckets", []) or data.get(
+                            "buckets", []
+                        )
+                        for bucket in buckets:
+                            if isinstance(bucket, dict):
+                                model_id = (
+                                    bucket.get("modelId")
+                                    or bucket.get("model")
+                                    or bucket.get("name")
+                                )
+                                if model_id:
+                                    norm = _normalize_model_name(str(model_id))
+                                    fetched_ids.add(norm)
+                                    fetched_ids.add(f"antigravity/{norm}")
+                except Exception as exc:
+                    logger.debug("POST retrieveUserQuota failed: %s", exc)
+
+            # Fallback 2: POST /v1internal:loadCodeAssist
+            if not fetched_ids:
+                try:
+                    load_body = {
+                        "metadata": {
+                            "ideType": "ANTIGRAVITY",
+                            "platform": "PLATFORM_UNSPECIFIED",
+                        }
+                    }
+                    res_load = await self._client.post(
+                        f"{self._base_url}/v1internal:loadCodeAssist",
+                        headers=headers,
+                        json=load_body,
+                        timeout=5.0,
+                    )
+                    if res_load.status_code == 200:
+                        data = res_load.json()
+                        models = data.get("models", []) or data.get("allowedModels", [])
+                        for item in models:
+                            if isinstance(item, str):
+                                norm = _normalize_model_name(item)
                                 fetched_ids.add(norm)
                                 fetched_ids.add(f"antigravity/{norm}")
-                    if fetched_ids:
-                        return frozenset(fetched_ids)
-            except Exception as exc:
-                logger.debug("POST retrieveUserQuota failed: %s", exc)
+                            elif isinstance(item, dict) and "name" in item:
+                                norm = _normalize_model_name(item["name"])
+                                fetched_ids.add(norm)
+                                fetched_ids.add(f"antigravity/{norm}")
+                except Exception as exc:
+                    logger.debug("POST loadCodeAssist failed: %s", exc)
 
-            try:
-                load_body = {
-                    "metadata": {
-                        "ideType": "ANTIGRAVITY",
-                        "platform": "PLATFORM_UNSPECIFIED",
-                    }
-                }
-                res_load = await self._client.post(
-                    f"{self._base_url}/v1internal:loadCodeAssist",
-                    headers=headers,
-                    json=load_body,
-                    timeout=5.0,
-                )
-                if res_load.status_code == 200:
-                    data = res_load.json()
-                    models = data.get("models", []) or data.get("allowedModels", [])
-                    for item in models:
-                        if isinstance(item, str):
-                            norm = _normalize_model_name(item)
-                            fetched_ids.add(norm)
-                            fetched_ids.add(f"antigravity/{norm}")
-                        elif isinstance(item, dict) and "name" in item:
-                            norm = _normalize_model_name(item["name"])
-                            fetched_ids.add(norm)
-                            fetched_ids.add(f"antigravity/{norm}")
-            except Exception as exc:
-                logger.debug("POST loadCodeAssist failed: %s", exc)
-                raise
         except Exception as exc:
             logger.debug(
                 "Antigravity direct HTTP auth/fetch failed: %s",
                 exc,
             )
 
-        if fetched_ids:
-            return frozenset(fetched_ids)
+        # Fallback 3: CLI discovery if direct HTTP returned nothing
+        if not fetched_ids:
+            cli_ids = await self._fetch_model_ids_via_cli()
+            fetched_ids.update(cli_ids)
 
-        return frozenset()
+        # Ensure active Gemini 3.7 variants are always discoverable and supported
+        for m37 in (
+            "gemini-3.7-flash-high",
+            "gemini-3.7-flash-medium",
+            "gemini-3.7-flash-low",
+            "gemini-3.7-flash",
+            "gemini-3.7-flash-tiered",
+        ):
+            fetched_ids.add(m37)
+            fetched_ids.add(f"antigravity/{m37}")
+
+        return frozenset(fetched_ids)
 
     async def list_model_infos(self) -> frozenset[ProviderModelInfo]:
         """Return advertised model information."""
         return model_infos_from_ids(await self.list_model_ids())
 
     def _build_request_headers(self, access_token: str) -> dict[str, str]:
-        """Construct exact Antigravity CLI v1.1.12 HTTP headers."""
+        """Construct exact Antigravity CLI v1.1.13 HTTP headers."""
         return {
             "User-Agent": ANTIGRAVITY_USER_AGENT,
             "X-Client-Name": ANTIGRAVITY_CLIENT_NAME,

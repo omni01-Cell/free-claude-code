@@ -216,7 +216,7 @@ function renderConnectedAccountCard(provider, status = provider) {
 
   const meta = document.createElement("div");
   meta.className = "provider-meta";
-  meta.textContent = connectedAccountMeta(status);
+  meta.textContent = connectedAccountMeta(status, provider);
 
   const actions = document.createElement("div");
   actions.className = "provider-actions";
@@ -235,9 +235,13 @@ function connectedAccountLabel(status) {
   return labels[status.state] || status.label || "Not connected";
 }
 
-function connectedAccountMeta(status) {
+function connectedAccountMeta(status, provider) {
+  const providerName =
+    provider?.display_name ||
+    (provider?.provider_id === "antigravity" ? "Google Antigravity" : "ChatGPT");
   if (status.connected) {
-    const identity = status.email || "ChatGPT subscription connected";
+    const defaultIdentity = `${providerName} connected`;
+    const identity = status.email || defaultIdentity;
     const models = Number.isInteger(status.model_count)
       ? `${status.model_count} model${status.model_count === 1 ? "" : "s"} available. `
       : "";
@@ -250,7 +254,7 @@ function connectedAccountMeta(status) {
   if (status.state === "connecting") {
     return "Finish signing in, then return to this page.";
   }
-  return status.message || "Connect a ChatGPT account to discover subscription models.";
+  return status.message || `Connect a ${providerName} account to discover models.`;
 }
 
 function populateConnectedAccountActions(provider, status, actions) {
@@ -373,7 +377,9 @@ async function cancelConnectedAccountLogin(providerId) {
 }
 
 async function disconnectConnectedAccount(providerId) {
-  if (!window.confirm("Disconnect this ChatGPT account from FCC?")) return;
+  const providerName =
+    connectedAccountDescriptor(providerId)?.display_name || "account";
+  if (!window.confirm(`Disconnect this ${providerName} account from FCC?`)) return;
   clearConnectedAccountPoll(providerId);
   const status = await api(`/admin/api/providers/${providerId}/auth`, {
     method: "DELETE",

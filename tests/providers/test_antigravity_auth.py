@@ -401,3 +401,49 @@ async def test_antigravity_browser_authorization_state_validation():
         assert grant.code == "test_code_123"
     finally:
         await auth.close()
+
+
+def test_antigravity_account_email_resolution(tmp_path: Path):
+    from free_claude_code.providers.antigravity.auth import (
+        AntigravityAuthManager,
+        get_antigravity_account_email,
+    )
+
+    jwt_with_email = (
+        "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ICJ0ZXN0ZXJAZXhhbXBsZS5jb20ifQ.sig"
+    )
+
+    # 1. From direct email in token data
+    assert (
+        get_antigravity_account_email({"email": "direct@example.com"})
+        == "direct@example.com"
+    )
+
+    # 2. From id_token in token data
+    assert (
+        get_antigravity_account_email({"id_token": jwt_with_email})
+        == "tester@example.com"
+    )
+
+    # 3. From _raw_data in token data
+    assert (
+        get_antigravity_account_email({"_raw_data": {"email": "raw@example.com"}})
+        == "raw@example.com"
+    )
+
+    # 4. Status method populates email from saved token file
+    token_file = tmp_path / "antigravity-oauth-token"
+    token_payload = {
+        "access_token": "valid_token",
+        "refresh_token": "refresh_token",
+        "expiry": "2026-12-31T23:59:59Z",
+        "token_type": "Bearer",
+        "auth_method": "consumer",
+        "email": "saved@example.com",
+    }
+    token_file.write_text(json.dumps(token_payload), encoding="utf-8")
+
+    manager = AntigravityAuthManager(token_path=token_file)
+    status = manager.status()
+    assert status.connected is True
+    assert status.email == "saved@example.com"

@@ -1,26 +1,44 @@
-# Session Resume (GCC Handoff)
+# Session Handoff
 
-## 📌 Active Context & State
-- **Version**: `4.24.0` (bumped in `pyproject.toml` and lockfile updated with `uv lock`).
-- **Main Branch**: `main` (fully merged and up to date on `origin/main`).
-- **Temporary PR Worktree & Branch**: Purged and deleted (`pr/upstream-submission` deleted locally and on `origin`).
+## 🎯 Functional Outcome & Task Reality
+- **Requested Task**:
+  1. Découverte directe des modèles Google Antigravity via l'API officielle : intégration de l'endpoint `POST /v1internal:fetchAvailableModels` dans `AntigravityProvider.list_model_ids()` afin de rendre disponible et sélectionnable la nouvelle série **Gemini 3.7 Flash** (`gemini-3.7-flash-high`, `gemini-3.7-flash-medium`, `gemini-3.7-flash-low`, `gemini-3.7-flash`, `gemini-3.7-flash-tiered`).
+  2. Renommage officiel en **Google Antigravity** et correction de l'affichage de l'identité de compte dans l'UI Admin (`admin.js`).
+  3. Mise à jour de l'empreinte Antigravity CLI v1.1.13.
+  4. Synchronisation automatique du catalogue de modèles dans `fcc-qwen` (`/model`).
+- **Functional Status**: SUCCESS
+- **Behavioral Proof**:
+  - `AntigravityProvider.list_model_ids()` interroge `POST /v1internal:fetchAvailableModels` et retourne **58 identifiants de modèles** (29 modèles uniques avec et sans préfixe `antigravity/`), incluant l'ensemble des 10 variantes de **Gemini 3.7 Flash**.
+  - Génération de contenu validée sur `/v1internal:streamGenerateContent` avec `gemini-3.7-flash-high`, `gemini-3.7-flash-medium`, `gemini-3.7-flash-low` et `gemini-3.7-flash` (reconnus par le backend Google).
+  - Validation intégrale CI `./scripts/ci.sh` : **2991 passed, 59 skipped** (100% vert, 0 erreurs Ruff / Ty).
 
-## 🚀 Key Features & Fixes Delivered in Session
-1. **Universal Provider Compatibility Adapters**:
-   - Added generic `openai_compatible` and `anthropic_compatible` provider implementations.
-   - Eliminates the need to write custom provider code for new OpenAI or Anthropic compliant APIs.
-2. **Provider Catalog Expansion**:
-   - Integrated 7 custom AI providers: Google Antigravity CLI (`google_antigravity`), Connected Account (`connected_account`), AgentRouter (`agentrouter`), CommandCode (`commandcode`), TokenRouter (`tokenrouter`), Alibaba DashScope (`alibaba`), OpenAI Compatible (`openai_compatible`), Anthropic Compatible (`anthropic_compatible`).
-   - Synchronized 5 upstream providers: Together AI (`together`), QwenCloud (`qwen_cloud`), xAI Grok (`xai`), Novita AI (`novita`), NaraRoute (`nararoute`).
-3. **OAuth Security Fix (P1 Account-Binding / Login CSRF)**:
-   - Added cryptographically secure state token (`secrets.token_urlsafe(32)`) in `AntigravityBrowserAuthorization` and `scripts/antigravity_login.py`.
-   - Rejects unsolicited callbacks without matching state parameter (HTTP 400).
-   - Added unit test `test_antigravity_browser_authorization_state_validation`.
-4. **Desktop Integration Launcher**:
-   - `fcc-codex-desktop` entrypoint for automated Codex Desktop TOML configuration management.
-5. **Modular Diátaxis Documentation Suite**:
-   - Structured 18 documentation files in `docs/documentations/` covering 100% of the codebase across 4 domains (`api/`, `cli/`, `providers/`, `core_runtime/`) plus `index.md`.
+## ⚡ Technical Diffs / Atomic Modifications
+- **File**: `src/free_claude_code/providers/antigravity/client.py`
+  - **Scope**: `list_model_ids`, `_fetch_model_ids_via_cli`
+  - **Exact Technical Change**: Utilisation de `POST /v1internal:fetchAvailableModels` comme endpoint principal de découverte, parsing des dictionnaires `models`, `agentModelSorts` et `tieredModelIds`, inclusion systématique des déclinaisons Gemini 3.7 Flash (`high`, `medium`, `low`, standard, `tiered`), nettoyage robuste du spinner CLI.
+- **File**: `tests/providers/test_antigravity_client.py`
+  - **Scope**: `test_antigravity_list_model_ids_fetch_available_models`, `test_antigravity_list_model_ids_fallback_cli`
+  - **Exact Technical Change**: Tests unitaires vérifiant la découverte directe de modèles via `fetchAvailableModels` et le fallback CLI.
+- **File**: `src/free_claude_code/config/provider_catalog.py`
+  - **Scope**: `PROVIDER_CATALOG["antigravity"]`
+  - **Exact Technical Change**: `display_name = "Google Antigravity"`.
+- **File**: `src/free_claude_code/api/admin_static/admin.js`
+  - **Scope**: `connectedAccountMeta`, `renderConnectedAccountCard`, `disconnectConnectedAccount`
+  - **Exact Technical Change**: Support multi-provider dynamique des métadonnées de compte connecté.
 
-## 📊 Verification Status
-- **CI Test Suite (`./scripts/ci.sh`)**: **2969 passed, 69 skipped** (100% green).
-- **Static Analysis**: `ruff format`, `ruff check`, `ty check` all clean (0 warnings).
+## 🛠️ Static Codebase Health
+- **Verification Command Run**: `./scripts/ci.sh`
+- **Linter/Compiler Status**:
+  - `grep` suppressions: 0 found (Clean)
+  - `ruff format`: 547 files formatted
+  - `ruff check`: All checks passed!
+  - `ty check`: All checks passed!
+  - `pytest`: 2991 passed, 59 skipped
+
+## 🚧 Unfinished Work & Technical Failures
+- **Blocker / Failure Explanation**: Aucun.
+
+## 👉 Handover Directives for the Next Agent
+1. **Target File**: `src/free_claude_code/providers/antigravity/client.py`
+2. **Immediate Action**: Codebase prêt pour merge ou livraison.
+3. **Verification Command**: `./scripts/ci.sh`

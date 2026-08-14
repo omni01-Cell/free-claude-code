@@ -1,6 +1,6 @@
 # Free Claude Code (FCC) Documentation
 
-Welcome to the official documentation for **Free Claude Code (FCC)**. This project implements a local AI proxy server connecting coding agents (Claude Code, OpenAI Codex, Pi) to diverse AI providers (Google Antigravity CLI, OpenAI, Anthropic, OpenRouter, NVIDIA NIM, Mistral, AgentRouter, CommandCode, TokenRouter, Alibaba DashScope, Together AI, QwenCloud, xAI Grok, Novita AI, NaraRoute, and local LLMs).
+Welcome to the official documentation for **Free Claude Code (FCC)**. This project implements a local AI proxy server connecting coding agents (Claude Code, OpenAI Codex, Pi) to diverse AI providers (Google Antigravity, OpenAI, Anthropic, OpenRouter, NVIDIA NIM, Mistral, AgentRouter, CommandCode, TokenRouter, Alibaba DashScope, Together AI, QwenCloud, xAI Grok, Novita AI, NaraRoute, and local LLMs).
 
 ---
 

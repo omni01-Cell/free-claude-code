@@ -168,7 +168,7 @@ def test_admin_connected_account_login_preopens_sign_in_window():
     assert '"Reconnect"' in script
     assert '"Copy code"' in script
     assert "Restart your agent to refresh its model picker." in script
-    assert 'window.confirm("Disconnect this ChatGPT account from FCC?")' in script
+    assert "Disconnect this ${providerName} account from FCC?" in script
 
 
 class _FakeConnectedAccount:

@@ -165,7 +165,7 @@ def main() -> None:
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
-        "User-Agent": "antigravity/1.1.12 (Linux)",
+        "User-Agent": "antigravity/1.1.13 (Linux)",
     }
     load_body = {
         "metadata": {
