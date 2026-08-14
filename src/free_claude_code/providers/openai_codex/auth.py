@@ -498,6 +498,16 @@ class OpenAIAuthManager:
 
     def _read_credentials(self) -> _Credentials | None:
         if not self._credential_path.is_file():
+            legacy_path = self._credential_path.parent.parent / "openai.json"
+            if legacy_path.is_file():
+                try:
+                    payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict) and payload.get("version") == 1:
+                        creds = _Credentials.from_json(payload.get("credentials"))
+                        self._write_credentials_unlocked(creds)
+                        return creds
+                except Exception:
+                    pass
             return None
         try:
             payload = json.loads(self._credential_path.read_text(encoding="utf-8"))

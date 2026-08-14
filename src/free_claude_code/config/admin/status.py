@@ -92,11 +92,13 @@ def _value_for_settings_attr(
                 import os
                 from pathlib import Path
 
+                from free_claude_code.config.paths import antigravity_auth_path
+
                 token_paths = [
+                    antigravity_auth_path(),
                     Path(
                         "~/.gemini/antigravity-cli/antigravity-oauth-token"
                     ).expanduser(),
-                    Path("~/.config/antigravity/oauth_token.json").expanduser(),
                 ]
                 env_file = os.environ.get("ANTIGRAVITY_TOKEN_FILE")
                 if env_file:

@@ -24,6 +24,10 @@ from free_claude_code.application.connected_accounts import (
     ConnectedAccountState,
     ConnectedAccountStatus,
 )
+from free_claude_code.config.paths import (
+    antigravity_accounts_path,
+    antigravity_auth_path,
+)
 from free_claude_code.providers.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
@@ -46,12 +50,15 @@ DEFAULT_ANTIGRAVITY_CLIENT_SECRET = os.environ.get(
     "GOCSPX-" + "K58FWR486LdLJ1mLB8sXC4z6qDAf",
 )
 
-# Token locations in order of priority
-PRIMARY_TOKEN_PATH = Path(
-    "~/.gemini/antigravity-cli/antigravity-oauth-token"
-).expanduser()
-SECONDARY_TOKEN_PATH = Path("~/.config/antigravity/oauth_token.json").expanduser()
-TERTIARY_TOKEN_PATH = Path("~/.gemini/oauth_creds.json").expanduser()
+# Token locations in order of priority (FCC-isolated by default)
+PRIMARY_TOKEN_PATH = antigravity_auth_path()
+LEGACY_HOST_TOKEN_PATHS = (
+    Path("~/.gemini/antigravity-cli/antigravity-oauth-token").expanduser(),
+    Path("~/.config/antigravity/oauth_token.json").expanduser(),
+    Path("~/.gemini/oauth_creds.json").expanduser(),
+    Path("~/.config/gemini/credentials.json").expanduser(),
+    Path("~/.config/gcloud/application_default_credentials.json").expanduser(),
+)
 
 
 def decode_jwt_payload(jwt_token: str) -> dict[str, Any]:
@@ -199,7 +206,7 @@ def load_token_from_file(file_path: Path | str) -> dict[str, Any] | None:
 
 
 def get_candidate_token_files() -> list[Path]:
-    """Return all candidate token file paths dynamically discovered in priority order."""
+    """Return all candidate token file paths in priority order."""
     env_path = os.environ.get("ANTIGRAVITY_TOKEN_FILE")
     candidates: list[Path] = []
     if env_path:
@@ -207,37 +214,51 @@ def get_candidate_token_files() -> list[Path]:
         if p.is_file():
             candidates.append(p)
 
-    standard_paths = [
-        PRIMARY_TOKEN_PATH,
-        SECONDARY_TOKEN_PATH,
-        TERTIARY_TOKEN_PATH,
-        Path("~/.config/gemini/credentials.json").expanduser(),
-        Path("~/.config/gcloud/application_default_credentials.json").expanduser(),
-    ]
+    fcc_path = antigravity_auth_path()
+    if fcc_path.is_file():
+        if fcc_path not in candidates:
+            candidates.append(fcc_path)
+        return candidates
 
-    for base in (
-        Path("~/.gemini").expanduser(),
-        Path("~/.config/antigravity").expanduser(),
-    ):
-        if base.is_dir():
-            for json_file in base.glob("*.json"):
-                if json_file.is_file() and json_file not in standard_paths:
-                    standard_paths.append(json_file)
+    # Bootstrap from host if available: seed ~/.fcc/auth/antigravity/oauth.json & google_accounts.json
+    for host_p in LEGACY_HOST_TOKEN_PATHS:
+        if host_p.is_file():
+            token_data = load_token_from_file(host_p)
+            if token_data and (
+                token_data.get("access_token") or token_data.get("refresh_token")
+            ):
+                try:
+                    fcc_path.parent.mkdir(parents=True, exist_ok=True)
+                    save_token_to_file(fcc_path, token_data)
+                    host_acc = Path("~/.gemini/google_accounts.json").expanduser()
+                    if host_acc.is_file():
+                        acc_fcc = antigravity_accounts_path()
+                        acc_fcc.parent.mkdir(parents=True, exist_ok=True)
+                        acc_fcc.write_text(
+                            host_acc.read_text(encoding="utf-8"), encoding="utf-8"
+                        )
+                    if fcc_path not in candidates:
+                        candidates.append(fcc_path)
+                    return candidates
+                except Exception as exc:
+                    logger.debug("Failed to bootstrap FCC Antigravity auth: %s", exc)
 
-    for p in standard_paths:
-        if p.is_file() and p not in candidates:
-            candidates.append(p)
+    if fcc_path not in candidates:
+        candidates.append(fcc_path)
     return candidates
 
 
 def find_token_file() -> Path | None:
     """Find the first existing Antigravity CLI token file."""
     candidates = get_candidate_token_files()
-    return candidates[0] if candidates else None
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    return None
 
 
 def load_antigravity_token() -> dict[str, Any]:
-    """Load Antigravity CLI OAuth token from env or first valid candidate disk file."""
+    """Load Antigravity CLI OAuth token from env or primary candidate disk file."""
     env_access_token = os.environ.get("ANTIGRAVITY_ACCESS_TOKEN")
     if env_access_token:
         return {
@@ -252,7 +273,7 @@ def load_antigravity_token() -> dict[str, Any]:
     token_file = find_token_file()
     if not token_file:
         raise AuthenticationError(
-            "No Antigravity CLI token found. Please ensure ~/.gemini/antigravity-cli/antigravity-oauth-token "
+            f"No Antigravity token found. Please ensure {antigravity_auth_path()} "
             "exists or ANTIGRAVITY_ACCESS_TOKEN is set in environment."
         )
 
@@ -262,7 +283,7 @@ def load_antigravity_token() -> dict[str, Any]:
             return data
 
     raise AuthenticationError(
-        "No Antigravity CLI token found. Please ensure ~/.gemini/antigravity-cli/antigravity-oauth-token "
+        f"No Antigravity token found. Please ensure {antigravity_auth_path()} "
         "exists or ANTIGRAVITY_ACCESS_TOKEN is set in environment."
     )
 
@@ -289,10 +310,22 @@ def get_antigravity_account_email(
                 if claims and claims.get("email"):
                     return str(claims["email"])
 
-    acc_path = Path("~/.gemini/google_accounts.json").expanduser()
+    # 1. Primary: FCC accounts file (~/.fcc/auth/antigravity/google_accounts.json)
+    acc_path = antigravity_accounts_path()
     if acc_path.is_file():
         try:
             with open(acc_path, encoding="utf-8") as f:
+                acc_data = json.load(f)
+            if isinstance(acc_data, dict) and acc_data.get("active"):
+                return str(acc_data["active"])
+        except Exception:
+            pass
+
+    # 2. Host accounts file as fallback (~/.gemini/google_accounts.json)
+    host_acc_path = Path("~/.gemini/google_accounts.json").expanduser()
+    if host_acc_path.is_file():
+        try:
+            with open(host_acc_path, encoding="utf-8") as f:
                 acc_data = json.load(f)
             if isinstance(acc_data, dict) and acc_data.get("active"):
                 return str(acc_data["active"])
@@ -425,6 +458,14 @@ def save_token_to_file(file_path: Path | str, token_data: dict[str, Any]) -> boo
                 save_obj["expiry"] = token_data["expiry"]
             if token_data.get("auth_method"):
                 save_obj["auth_method"] = token_data["auth_method"]
+            if token_data.get("id_token"):
+                save_obj["id_token"] = token_data["id_token"]
+            if token_data.get("email"):
+                save_obj["email"] = token_data["email"]
+            if token_data.get("client_id"):
+                save_obj["client_id"] = token_data["client_id"]
+            if token_data.get("client_secret"):
+                save_obj["client_secret"] = token_data["client_secret"]
             content = json.dumps(save_obj, indent=2)
 
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -1023,8 +1064,9 @@ class AntigravityAuthManager:
             async with self._state_lock:
                 if self._token_path.is_file():
                     self._token_path.unlink(missing_ok=True)
-                for candidate in get_candidate_token_files():
-                    candidate.unlink(missing_ok=True)
+                acc_path = antigravity_accounts_path()
+                if acc_path.is_file():
+                    acc_path.unlink(missing_ok=True)
                 self._revision += 1
                 self._last_error = None
                 return self.status()
@@ -1106,6 +1148,14 @@ class AntigravityAuthManager:
             "email": email,
         }
         save_token_to_file(self._token_path, save_payload)
+        if email:
+            try:
+                acc_path = antigravity_accounts_path()
+                acc_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(acc_path, "w", encoding="utf-8") as f:
+                    json.dump({"active": email, "accounts": [email]}, f, indent=2)
+            except Exception:
+                pass
 
     def _detach_login_locked(
         self,

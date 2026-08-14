@@ -144,7 +144,7 @@ def test_load_antigravity_token_missing(monkeypatch: pytest.MonkeyPatch):
         "free_claude_code.providers.antigravity.auth.find_token_file", lambda: None
     )
 
-    with pytest.raises(AuthenticationError, match="No Antigravity CLI token found"):
+    with pytest.raises(AuthenticationError, match="No Antigravity token found"):
         load_antigravity_token()
 
 
@@ -447,3 +447,78 @@ def test_antigravity_account_email_resolution(tmp_path: Path):
     status = manager.status()
     assert status.connected is True
     assert status.email == "saved@example.com"
+
+
+@pytest.mark.asyncio
+async def test_antigravity_isolated_save_tokens_and_accounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from free_claude_code.providers.antigravity.auth import AntigravityAuthManager
+
+    fake_fcc_token = tmp_path / "auth" / "antigravity" / "oauth.json"
+    fake_fcc_acc = tmp_path / "auth" / "antigravity" / "google_accounts.json"
+
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fake_fcc_token,
+    )
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_accounts_path",
+        lambda: fake_fcc_acc,
+    )
+
+    manager = AntigravityAuthManager(token_path=fake_fcc_token)
+    token_json = {
+        "access_token": "fcc_access_123",
+        "refresh_token": "fcc_refresh_456",
+        "expires_in": 3600,
+        "email": "user@google.com",
+    }
+    await manager._save_tokens(token_json)
+
+    assert fake_fcc_token.is_file()
+    saved_token = json.loads(fake_fcc_token.read_text(encoding="utf-8"))
+    assert saved_token["access_token"] == "fcc_access_123"
+    assert saved_token["email"] == "user@google.com"
+
+    assert fake_fcc_acc.is_file()
+    saved_acc = json.loads(fake_fcc_acc.read_text(encoding="utf-8"))
+    assert saved_acc["active"] == "user@google.com"
+
+
+@pytest.mark.asyncio
+async def test_antigravity_disconnect_does_not_touch_host_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from free_claude_code.providers.antigravity.auth import AntigravityAuthManager
+
+    fake_fcc_token = tmp_path / "fcc" / "oauth.json"
+    fake_fcc_acc = tmp_path / "fcc" / "google_accounts.json"
+    host_token = tmp_path / "host" / "antigravity-oauth-token"
+
+    fake_fcc_token.parent.mkdir(parents=True, exist_ok=True)
+    fake_fcc_token.write_text('{"access_token": "fcc_tok"}', encoding="utf-8")
+    fake_fcc_acc.write_text('{"active": "user@fcc.com"}', encoding="utf-8")
+    host_token.parent.mkdir(parents=True, exist_ok=True)
+    host_token.write_text('{"access_token": "host_tok"}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fake_fcc_token,
+    )
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_accounts_path",
+        lambda: fake_fcc_acc,
+    )
+
+    manager = AntigravityAuthManager(token_path=fake_fcc_token)
+    await manager.disconnect()
+
+    # FCC files are removed
+    assert not fake_fcc_token.exists()
+    assert not fake_fcc_acc.exists()
+    # Host file remains untouched
+    assert host_token.is_file()
+    assert (
+        json.loads(host_token.read_text(encoding="utf-8"))["access_token"] == "host_tok"
+    )

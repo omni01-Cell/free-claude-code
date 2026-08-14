@@ -11,9 +11,14 @@ import time
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 
 import httpx
+
+from free_claude_code.config.paths import (
+    antigravity_accounts_path,
+    antigravity_auth_path,
+)
+from free_claude_code.providers.antigravity.auth import decode_jwt_payload
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -34,9 +39,7 @@ SCOPES = [
 ]
 
 TOKEN_SAVE_PATHS = [
-    Path("~/.gemini/antigravity-cli/antigravity-oauth-token").expanduser(),
-    Path("~/.gemini/oauth_creds.json").expanduser(),
-    Path("~/.config/antigravity/oauth_token.json").expanduser(),
+    antigravity_auth_path(),
 ]
 
 auth_code_received: str | None = None
@@ -138,6 +141,13 @@ def main() -> None:
     expires_in = token_json.get("expires_in", 3600)
     expiry_timestamp = time.time() + float(expires_in)
 
+    id_token = token_json.get("id_token")
+    email = token_json.get("email")
+    if not email and id_token:
+        claims = decode_jwt_payload(id_token)
+        if claims and claims.get("email"):
+            email = str(claims["email"])
+
     save_payload = {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -147,7 +157,8 @@ def main() -> None:
         "auth_method": "consumer",
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
-        "id_token": token_json.get("id_token"),
+        "id_token": id_token,
+        "email": email,
     }
 
     print("\nSaving OAuth token to candidate paths:")
@@ -159,6 +170,16 @@ def main() -> None:
             print(f"  ✅ Saved: {save_path}")
         except Exception as e:
             print(f"  ❌ Failed to save to {save_path}: {e}")
+
+    if email:
+        try:
+            acc_path = antigravity_accounts_path()
+            acc_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(acc_path, "w", encoding="utf-8") as f:
+                json.dump({"active": email, "accounts": [email]}, f, indent=2)
+            print(f"  ✅ Saved account metadata: {acc_path}")
+        except Exception as e:
+            print(f"  ❌ Failed to save account metadata to {acc_path}: {e}")
 
     # Test loadCodeAssist
     print("\nVerifying token with Google Cloud Code Assist API...")

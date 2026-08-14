@@ -11,6 +11,11 @@ FCC_LOGS_DIRNAME = "logs"
 SERVER_LOG_FILENAME = "server.log"
 CODEX_MODEL_CATALOG_FILENAME = "codex-model-catalog.json"
 AUTH_DIRNAME = "auth"
+OAUTH_FILENAME = "oauth.json"
+OAUTH_LOCK_FILENAME = "oauth.lock"
+ANTIGRAVITY_PROVIDER_DIRNAME = "antigravity"
+OPENAI_PROVIDER_DIRNAME = "openai"
+GOOGLE_ACCOUNTS_FILENAME = "google_accounts.json"
 OPENAI_AUTH_FILENAME = "openai.json"
 OPENAI_AUTH_LOCK_FILENAME = "openai.lock"
 QWEN_DIRNAME = ".qwen"
@@ -57,16 +62,52 @@ def codex_model_catalog_path() -> Path:
     return config_dir_path() / CODEX_MODEL_CATALOG_FILENAME
 
 
-def openai_auth_path() -> Path:
-    """Return FCC's private ChatGPT credential file path."""
+def auth_dir_path() -> Path:
+    """Return the FCC authentication root directory (~/.fcc/auth)."""
 
-    return config_dir_path() / AUTH_DIRNAME / OPENAI_AUTH_FILENAME
+    return config_dir_path() / AUTH_DIRNAME
+
+
+def antigravity_auth_dir_path() -> Path:
+    """Return the FCC Antigravity authentication directory (~/.fcc/auth/antigravity)."""
+
+    return auth_dir_path() / ANTIGRAVITY_PROVIDER_DIRNAME
+
+
+def antigravity_auth_path() -> Path:
+    """Return FCC's Antigravity OAuth credential file path (~/.fcc/auth/antigravity/oauth.json)."""
+
+    return antigravity_auth_dir_path() / OAUTH_FILENAME
+
+
+def antigravity_auth_lock_path() -> Path:
+    """Return FCC's Antigravity OAuth lock path (~/.fcc/auth/antigravity/oauth.lock)."""
+
+    return antigravity_auth_dir_path() / OAUTH_LOCK_FILENAME
+
+
+def antigravity_accounts_path() -> Path:
+    """Return FCC's Google accounts file path (~/.fcc/auth/antigravity/google_accounts.json)."""
+
+    return antigravity_auth_dir_path() / GOOGLE_ACCOUNTS_FILENAME
+
+
+def openai_auth_dir_path() -> Path:
+    """Return the FCC OpenAI authentication directory (~/.fcc/auth/openai)."""
+
+    return auth_dir_path() / OPENAI_PROVIDER_DIRNAME
+
+
+def openai_auth_path() -> Path:
+    """Return FCC's OpenAI OAuth credential file path (~/.fcc/auth/openai/oauth.json)."""
+
+    return openai_auth_dir_path() / OAUTH_FILENAME
 
 
 def openai_auth_lock_path() -> Path:
-    """Return the cross-process lock path for ChatGPT credentials."""
+    """Return the cross-process lock path for OpenAI OAuth credentials (~/.fcc/auth/openai/oauth.lock)."""
 
-    return config_dir_path() / AUTH_DIRNAME / OPENAI_AUTH_LOCK_FILENAME
+    return openai_auth_dir_path() / OAUTH_LOCK_FILENAME
 
 
 def qwen_dir_path(env: Mapping[str, str] | None = None) -> Path:
