@@ -7,10 +7,7 @@ from pydantic import BaseModel
 from free_claude_code.application.ports import RequestRuntimePort
 from free_claude_code.config.model_refs import configured_chat_model_refs
 from free_claude_code.config.settings import Settings
-from free_claude_code.core.gateway_model_ids import (
-    gateway_model_id,
-    no_thinking_gateway_model_id,
-)
+from free_claude_code.core.gateway_model_ids import gateway_model_id
 
 DISCOVERED_MODEL_CREATED_AT = "1970-01-01T00:00:00Z"
 
@@ -138,20 +135,11 @@ def _append_provider_model_variants(
     *,
     supports_thinking: bool | None = None,
 ) -> None:
-    if supports_thinking is not False:
-        _append_unique_model(
-            models,
-            seen,
-            _discovered_model_response(
-                gateway_model_id(provider_model_ref),
-                display_name=provider_model_ref,
-            ),
-        )
     _append_unique_model(
         models,
         seen,
         _discovered_model_response(
-            no_thinking_gateway_model_id(provider_model_ref),
-            display_name=f"{provider_model_ref} (no thinking)",
+            gateway_model_id(provider_model_ref),
+            display_name=provider_model_ref,
         ),
     )

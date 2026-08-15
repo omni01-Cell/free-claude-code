@@ -60,7 +60,7 @@ QWENCLOUD_DEFAULT_BASE = (
 TOGETHER_DEFAULT_BASE = "https://api.together.ai/v1"
 # TokenRouter OpenAI-compatible Chat Completions gateway.
 TOKENROUTER_DEFAULT_BASE = "https://api.tokenrouter.com/v1"
-ANTIGRAVITY_DEFAULT_BASE = "https://cloudcode-pa.googleapis.com"
+ANTIGRAVITY_DEFAULT_BASE = "https://daily-cloudcode-pa.googleapis.com"
 AGENTROUTER_DEFAULT_BASE = "https://ps.air-outer.com/v1"
 COMMANDCODE_DEFAULT_BASE = "https://api.commandcode.ai/provider/v1"
 ALIBABA_DEFAULT_BASE = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"

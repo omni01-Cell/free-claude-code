@@ -1,6 +1,11 @@
 # Current Project Context
 
 ## 🏆 Major Milestones (Archived Epics)
+- 2026-08-15: **Version 4.28.5 Release sur `main`** :
+  1. **Alignement Global Endpoint Antigravity (`ANTIGRAVITY_DEFAULT_BASE`)** : Mise à jour de `ANTIGRAVITY_DEFAULT_BASE` dans `provider_catalog.py` vers `https://daily-cloudcode-pa.googleapis.com` pour garantir que la découverte automatique des modèles (`fetchAvailableModels`) interroge l'endpoint actif et remonte `gemini-3.7-flash-tiered`.
+  2. **Suppression des Variantes Synthétiques "(no thinking)"** : Nettoyage de `build_models_list_response` (`/v1/models`) pour n'exposer que l'identifiant réel unique par modèle sans doubler la liste avec les entrées synthétiques `(no thinking)`.
+  3. **Robustesse de Normalisation des Préfixes (`_normalize_model_name`)** : Nettoyage récursif des préfixes imbriqués (`antigravity/antigravity/...`) pour éviter les rejets d'inférence en `400 INVALID_ARGUMENT` ou `404 NOT_FOUND` et éliminer les doublons de préfixes dans `list_model_ids`.
+  4. **Validation Qualité CI** : 3041 tests passés avec succès, typage `ty check` et `ruff check` passés à 100%.
 - 2026-08-14: **Version 4.28.4 Release sur `main`** :
   1. **Vérité Stricte des Modèles (Zéro Modèle en Dur / Zéro Alias Synthétique)** : Suppression définitive de tout dictionnaire d'alias (`ANTIGRAVITY_MODEL_ALIASES`) et de toute boucle d'injection synthétique. Le catalogue `/v1/models` et les requêtes reflètent exclusivement les modèles réels exposés par l'infrastructure Google en amont (`fetchAvailableModels`).
   2. **Isolation Stricte à 100% dans `~/.fcc/`** : Suppression complète du bootstrap ou fallback automatique depuis le Keyring système ou les dossiers hôtes (`~/.gemini/`). FCC opère exclusivement avec `~/.fcc/auth/antigravity/oauth.json`.
@@ -17,6 +22,9 @@
 Maintenir le serveur proxy local free-claude-code à un niveau de qualité zéro-défaut pour Claude Code CLI, Codex, Pi et Qwen Code, assurer la compatibilité multi-provider et la conformité stricte aux garde-fous CI `./scripts/ci.sh`.
 
 ## 🧠 Decisions & Core Invariants (Règles Fondamentales)
+- 2026-08-15: **Endpoint Antigravity par défaut dans `provider_catalog.py`** :
+  - **Context** : `ANTIGRAVITY_DEFAULT_BASE` dans `provider_catalog.py` pointait encore sur `cloudcode-pa.googleapis.com` au lieu de `daily-cloudcode-pa.googleapis.com`, empêchant la découverte de `gemini-3.7-flash-tiered`.
+  - **Rationale** : Synchroniser `provider_catalog.py` avec `auth.py` sur `https://daily-cloudcode-pa.googleapis.com` pour unifier le routage et la découverte de modèles.
 - 2026-08-14: **RÈGLE INVARIANTE - VÉRITÉ API STRICTE ET INTERDICTION DES MODÈLES EN DUR** :
   - **Directive Utilisateur Absolue** : Ne JAMAIS coder en dur des listes de modèles, ne JAMAIS créer d'alias synthétiques qui modifient ou masquent ce que renvoie réellement l'API en amont.
   - **Rationale** : Modifier ou feindre les modèles retournés par une API est contraire à l'intégrité du proxy. Free Claude Code doit toujours exposer et utiliser fidèlement et exclusivement la réalité des modèles renvoyés par les providers.
@@ -34,9 +42,9 @@ Maintenir le serveur proxy local free-claude-code à un niveau de qualité zéro
 - `plan_antigravity_endpoint_and_model_resolution` : Résolution de l'erreur `RESOURCE_EXHAUSTED` du provider Google Antigravity via l'endpoint actif `daily-cloudcode-pa.googleapis.com` ([`.GCC/branches/plan_antigravity_endpoint_and_model_resolution.md`](file:///home/omni/free-claude-code/.GCC/branches/plan_antigravity_endpoint_and_model_resolution.md)).
 
 ## 📈 Current Status
-- ✅ Done: Version 4.28.4 déployée sur `main`, règles de vérité API et d'isolation stricte gravées dans l'architecture et vérifiées par les tests.
+- ✅ Done: Version 4.28.5 déployée sur `main`, `ANTIGRAVITY_DEFAULT_BASE` aligné sur `daily-cloudcode-pa.googleapis.com`, normalisation robuste des modèles.
 - 🔄 In progress: Aucun.
 - ⏳ Pending: Nouveaux retours ou tâches utilisateur.
 
 ## 👉 Next Session Direction
-Le proxy Free Claude Code opère en conformité intégrale avec les règles d'isolation stricte et de vérité des modèles de l'API sur la version 4.28.4.
+Le proxy Free Claude Code opère en conformité intégrale avec les règles d'isolation stricte et de vérité des modèles de l'API sur la version 4.28.5.

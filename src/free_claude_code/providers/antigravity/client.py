@@ -38,10 +38,18 @@ from free_claude_code.providers.model_listing import model_infos_from_ids
 
 logger = logging.getLogger(__name__)
 
+
 def _normalize_model_name(model: str) -> str:
     """Normalize model identifier by stripping prefixes."""
     m = str(model).strip()
-    return m.removeprefix("models/").removeprefix("antigravity/")
+    while True:
+        if m.startswith("models/"):
+            m = m.removeprefix("models/").strip()
+        elif m.startswith("antigravity/"):
+            m = m.removeprefix("antigravity/").strip()
+        else:
+            break
+    return m
 
 
 def _extract_error_message(raw_text: str) -> str:
@@ -470,7 +478,6 @@ class AntigravityProvider(BaseProvider):
                     if parts:
                         norm = _normalize_model_name(parts[0])
                         fetched_ids.add(norm)
-                        fetched_ids.add(f"antigravity/{norm}")
         except Exception as exc:
             logger.debug("CLI fallback model listing failed: %s", exc)
 
@@ -508,7 +515,6 @@ class AntigravityProvider(BaseProvider):
                             for model_id in models_dict:
                                 norm = _normalize_model_name(str(model_id))
                                 fetched_ids.add(norm)
-                                fetched_ids.add(f"antigravity/{norm}")
                         sorts = data.get("agentModelSorts", [])
                         if isinstance(sorts, list):
                             for sort_entry in sorts:
@@ -518,7 +524,6 @@ class AntigravityProvider(BaseProvider):
                                             for m in grp.get("modelIds", []):
                                                 norm = _normalize_model_name(str(m))
                                                 fetched_ids.add(norm)
-                                                fetched_ids.add(f"antigravity/{norm}")
                         tiered = data.get("tieredModelIds", {})
                         if isinstance(tiered, dict):
                             for t_models in tiered.values():
@@ -526,7 +531,6 @@ class AntigravityProvider(BaseProvider):
                                     for m in t_models:
                                         norm = _normalize_model_name(str(m))
                                         fetched_ids.add(norm)
-                                        fetched_ids.add(f"antigravity/{norm}")
                 except Exception as exc:
                     logger.debug(
                         "POST fetchAvailableModels failed on %s: %s", base_url, exc
@@ -559,7 +563,6 @@ class AntigravityProvider(BaseProvider):
                                     if model_id:
                                         norm = _normalize_model_name(str(model_id))
                                         fetched_ids.add(norm)
-                                        fetched_ids.add(f"antigravity/{norm}")
                     except Exception as exc:
                         logger.debug(
                             "POST retrieveUserQuota failed on %s: %s", base_url, exc
@@ -592,11 +595,9 @@ class AntigravityProvider(BaseProvider):
                                 if isinstance(item, str):
                                     norm = _normalize_model_name(item)
                                     fetched_ids.add(norm)
-                                    fetched_ids.add(f"antigravity/{norm}")
                                 elif isinstance(item, dict) and "name" in item:
                                     norm = _normalize_model_name(item["name"])
                                     fetched_ids.add(norm)
-                                    fetched_ids.add(f"antigravity/{norm}")
                     except Exception as exc:
                         logger.debug(
                             "POST loadCodeAssist failed on %s: %s", base_url, exc
