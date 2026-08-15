@@ -1,6 +1,10 @@
 # Current Project Context
 
 ## 🏆 Major Milestones (Archived Epics)
+- 2026-08-15: **Version 4.28.6 Release sur `main`** :
+  1. **Purge Définitive des Résidus d'Authentification Hôte** : Suppression complète des fallbacks `~/.gemini/google_accounts.json`, `~/.gemini/antigravity-cli/antigravity-oauth-token`, et des fonctions mortes Keyring/SecretService DBus (`load_token_from_keyring`, `_parse_keyring_secret`).
+  2. **Étanchéité et Isolation Stricte à 100% dans `~/.fcc/auth/`** : Aucun fichier hôte n'est lu ni vérifié lors de l'authentification ou de la résolution du compte actif.
+  3. **Validation Qualité CI** : 3041 tests passés avec succès, typage `ty check` et `ruff check` passés à 100%.
 - 2026-08-15: **Version 4.28.5 Release sur `main`** :
   1. **Alignement Global Endpoint Antigravity (`ANTIGRAVITY_DEFAULT_BASE`)** : Mise à jour de `ANTIGRAVITY_DEFAULT_BASE` dans `provider_catalog.py` vers `https://daily-cloudcode-pa.googleapis.com` pour garantir que la découverte automatique des modèles (`fetchAvailableModels`) interroge l'endpoint actif et remonte `gemini-3.7-flash-tiered`.
   2. **Suppression des Variantes Synthétiques "(no thinking)"** : Nettoyage de `build_models_list_response` (`/v1/models`) pour n'exposer que l'identifiant réel unique par modèle sans doubler la liste avec les entrées synthétiques `(no thinking)`.

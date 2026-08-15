@@ -2,12 +2,10 @@
 
 import asyncio
 import base64
-import importlib
 import json
 import logging
 import os
 import secrets
-import subprocess
 import time
 import urllib.parse
 import uuid
@@ -204,138 +202,6 @@ def load_token_from_file(file_path: Path | str) -> dict[str, Any] | None:
     }
 
 
-def _parse_keyring_secret(raw: str) -> dict[str, Any] | None:
-    """Parse raw JSON secret from system keyring."""
-    if not raw or not isinstance(raw, str):
-        return None
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-
-    tok = data.get("token")
-    if isinstance(tok, dict):
-        access_token = tok.get("access_token")
-        refresh_token = tok.get("refresh_token")
-        expiry = tok.get("expiry")
-        token_type = tok.get("token_type", "Bearer")
-        auth_method = data.get("auth_method", "consumer")
-    else:
-        access_token = data.get("access_token")
-        refresh_token = data.get("refresh_token")
-        expiry = data.get("expiry") or data.get("expiry_date")
-        token_type = data.get("token_type", "Bearer")
-        auth_method = data.get("auth_method", "consumer")
-
-    if not access_token and not refresh_token:
-        return None
-
-    id_token = data.get("id_token") or (
-        tok.get("id_token") if isinstance(tok, dict) else None
-    )
-    email = data.get("email") or (tok.get("email") if isinstance(tok, dict) else None)
-    if not email and id_token:
-        claims = decode_jwt_payload(id_token)
-        if claims and claims.get("email"):
-            email = str(claims["email"])
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "expiry": expiry,
-        "token_type": token_type,
-        "auth_method": auth_method,
-        "client_id": data.get("client_id") or DEFAULT_ANTIGRAVITY_CLIENT_ID,
-        "client_secret": data.get("client_secret") or DEFAULT_ANTIGRAVITY_CLIENT_SECRET,
-        "id_token": id_token,
-        "email": email,
-        "file_path": "keyring://gemini/antigravity",
-        "_raw_data": data,
-    }
-
-
-def load_token_from_keyring() -> dict[str, Any] | None:
-    """Attempt to load active Antigravity OAuth token from system Keyring / SecretService."""
-    # 1. Try python-keyring if available
-    try:
-        keyring = importlib.import_module("keyring")
-        for svc in ("gemini", "antigravity"):
-            for usr in ("antigravity", "token", "default"):
-                raw = keyring.get_password(svc, usr)
-                if raw:
-                    parsed = _parse_keyring_secret(raw)
-                    if parsed:
-                        return parsed
-    except Exception:
-        pass
-
-    # 2. Try DBus SecretService directly via in-process dbus-python if available
-    try:
-        dbus = importlib.import_module("dbus")
-        bus = dbus.SessionBus()
-        service = bus.get_object("org.freedesktop.secrets", "/org/freedesktop/secrets")
-        secrets_iface = dbus.Interface(service, "org.freedesktop.Secret.Service")
-        session_path = secrets_iface.OpenSession("plain", "")[1]
-        collection = bus.get_object(
-            "org.freedesktop.secrets",
-            "/org/freedesktop/secrets/collection/login",
-        )
-        col_iface = dbus.Interface(collection, "org.freedesktop.Secret.Collection")
-        items = col_iface.SearchItems({"service": "gemini", "username": "antigravity"})
-        if not items:
-            items = col_iface.SearchItems({"service": "antigravity"})
-        if items:
-            item = bus.get_object("org.freedesktop.secrets", items[0])
-            item_iface = dbus.Interface(item, "org.freedesktop.Secret.Item")
-            secret = item_iface.GetSecret(session_path)
-            secret_bytes = bytes(secret[2])
-            parsed = _parse_keyring_secret(secret_bytes.decode("utf-8"))
-            if parsed:
-                return parsed
-    except Exception:
-        pass
-
-    # 3. Try host python3 with dbus if available on Linux
-    if os.path.exists("/usr/bin/python3"):
-        try:
-            py_script = (
-                "import dbus, json\n"
-                "try:\n"
-                "    bus = dbus.SessionBus()\n"
-                "    service = bus.get_object('org.freedesktop.secrets', '/org/freedesktop/secrets')\n"
-                "    secrets_iface = dbus.Interface(service, 'org.freedesktop.Secret.Service')\n"
-                "    session_path = secrets_iface.OpenSession('plain', '')[1]\n"
-                "    collection = bus.get_object('org.freedesktop.secrets', '/org/freedesktop/secrets/collection/login')\n"
-                "    col_iface = dbus.Interface(collection, 'org.freedesktop.Secret.Collection')\n"
-                "    items = col_iface.SearchItems({'service': 'gemini', 'username': 'antigravity'})\n"
-                "    if not items:\n"
-                "        items = col_iface.SearchItems({'service': 'antigravity'})\n"
-                "    if items:\n"
-                "        item = bus.get_object('org.freedesktop.secrets', items[0])\n"
-                "        item_iface = dbus.Interface(item, 'org.freedesktop.Secret.Item')\n"
-                "        secret = item_iface.GetSecret(session_path)\n"
-                "        print(bytes(secret[2]).decode('utf-8'))\n"
-                "except Exception:\n"
-                "    pass\n"
-            )
-            proc = subprocess.run(
-                ["/usr/bin/python3", "-c", py_script],
-                capture_output=True,
-                text=True,
-                timeout=2.0,
-            )
-            if proc.returncode == 0 and proc.stdout.strip():
-                parsed = _parse_keyring_secret(proc.stdout.strip())
-                if parsed:
-                    return parsed
-        except Exception:
-            pass
-
-    return None
-
-
 def get_candidate_token_files() -> list[Path]:
     """Return all candidate token file paths in priority order (strictly FCC-isolated)."""
     env_path = os.environ.get("ANTIGRAVITY_TOKEN_FILE")
@@ -418,17 +284,6 @@ def get_antigravity_account_email(
     if acc_path.is_file():
         try:
             with open(acc_path, encoding="utf-8") as f:
-                acc_data = json.load(f)
-            if isinstance(acc_data, dict) and acc_data.get("active"):
-                return str(acc_data["active"])
-        except Exception:
-            pass
-
-    # 2. Host accounts file as fallback (~/.gemini/google_accounts.json)
-    host_acc_path = Path("~/.gemini/google_accounts.json").expanduser()
-    if host_acc_path.is_file():
-        try:
-            with open(host_acc_path, encoding="utf-8") as f:
                 acc_data = json.load(f)
             if isinstance(acc_data, dict) and acc_data.get("active"):
                 return str(acc_data["active"])

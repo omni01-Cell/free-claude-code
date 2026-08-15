@@ -14,8 +14,8 @@ from free_claude_code.providers.antigravity.auth import (
     ANTIGRAVITY_USER_AGENT,
     DEFAULT_FALLBACK_PROJECT_ID,
     AntigravityAuth,
-    _parse_keyring_secret,
     decode_jwt_payload,
+    get_antigravity_account_email,
     get_candidate_token_files,
     is_token_expired,
     load_antigravity_token,
@@ -526,43 +526,29 @@ async def test_antigravity_disconnect_does_not_touch_host_files(
     )
 
 
-def test_parse_keyring_secret():
+def test_get_antigravity_account_email_strict_isolation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    monkeypatch.delenv("ANTIGRAVITY_TOKEN_FILE", raising=False)
+    fake_fcc_acc = tmp_path / "fcc" / "google_accounts.json"
+    fake_fcc_auth = tmp_path / "fcc" / "oauth.json"
 
-    # Nested token object
-    raw_nested = json.dumps(
-        {
-            "token": {
-                "access_token": "keyring_acc_123",
-                "refresh_token": "keyring_ref_456",
-                "expiry": "2026-08-14T20:50:40Z",
-                "token_type": "Bearer",
-            },
-            "auth_method": "consumer",
-            "email": "keyring_user@gmail.com",
-        }
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_accounts_path",
+        lambda: fake_fcc_acc,
     )
-    parsed = _parse_keyring_secret(raw_nested)
-    assert parsed is not None
-    assert parsed["access_token"] == "keyring_acc_123"
-    assert parsed["refresh_token"] == "keyring_ref_456"
-    assert parsed["email"] == "keyring_user@gmail.com"
-
-    # Flat token object
-    raw_flat = json.dumps(
-        {
-            "access_token": "flat_acc_789",
-            "refresh_token": "flat_ref_012",
-            "email": "flat@example.com",
-        }
+    monkeypatch.setattr(
+        "free_claude_code.providers.antigravity.auth.antigravity_auth_path",
+        lambda: fake_fcc_auth,
     )
-    parsed_flat = _parse_keyring_secret(raw_flat)
-    assert parsed_flat is not None
-    assert parsed_flat["access_token"] == "flat_acc_789"
 
-    # Invalid JSON or non-string
-    assert _parse_keyring_secret("") is None
-    assert _parse_keyring_secret("{invalid") is None
-    assert _parse_keyring_secret("{}") is None
+    # When no FCC files exist, returns None (never checks host files)
+    assert get_antigravity_account_email() is None
+
+    # When FCC accounts file exists, returns the active account
+    fake_fcc_acc.parent.mkdir(parents=True, exist_ok=True)
+    fake_fcc_acc.write_text('{"active": "isolated_user@fcc.com"}', encoding="utf-8")
+    assert get_antigravity_account_email() == "isolated_user@fcc.com"
 
 
 def test_get_candidate_token_files_strict_isolation(

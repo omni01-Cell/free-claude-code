@@ -96,9 +96,6 @@ def _value_for_settings_attr(
 
                 token_paths = [
                     antigravity_auth_path(),
-                    Path(
-                        "~/.gemini/antigravity-cli/antigravity-oauth-token"
-                    ).expanduser(),
                 ]
                 env_file = os.environ.get("ANTIGRAVITY_TOKEN_FILE")
                 if env_file:

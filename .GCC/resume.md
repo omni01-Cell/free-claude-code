@@ -1,27 +1,25 @@
 # Session Handoff
 
 ## 🎯 Functional Outcome & Task Reality
-- **Requested Task**: Supprimer les variantes synthétiques "(no thinking)" de la liste `/v1/models` et des catalogues Codex/Claude pour n'afficher que l'identifiant propre de chaque modèle, et corriger l'endpoint de découverte Antigravity.
+- **Requested Task**: Purger définitivement tous les résidus d'authentification et de comptes de l'hôte (~/.gemini/, Keyring/SecretService DBus) pour garantir l'étanchéité stricte à 100% de l'authentification dans ~/.fcc/auth/.
 - **Functional Status**: SUCCESS
 - **Behavioral Proof**: 
-  - Chaque modèle est listé exactement une fois sans doublon `(no thinking)`.
-  - Élimination des préfixes imbriqués `antigravity/antigravity/...` dans `AntigravityProvider.list_model_ids()`.
+  - Suppression de tout accès à `~/.gemini/google_accounts.json` et `~/.gemini/antigravity-cli/antigravity-oauth-token`.
+  - Suppression complète des fonctions mortes Keyring/SecretService `_parse_keyring_secret` et `load_token_from_keyring`.
   - 3041 tests unitaires et intégration passés à 100% (`./scripts/ci.sh`).
-  - Outil `fcc-server` réinstallé et synchronisé via `uv tool install --editable . --force`.
+  - Outil `fcc-server` réinstallé et synchronisé en version 4.28.6 via `uv tool install --editable . --force`.
 
 ## ⚡ Technical Diffs / Atomic Modifications
-- **File**: `src/free_claude_code/api/model_catalog.py`
-  - **Scope**: Modification de `_append_provider_model_variants` pour ne plus générer les entrées `no_thinking_gateway_model_id` / `(no thinking)`.
-- **File**: `src/free_claude_code/providers/antigravity/client.py`
-  - **Scope**: Suppression de l'auto-préfixage `antigravity/{norm}` dans `list_model_ids` (le préfixage unique est géré par `model_cache`). Normalisation récursive dans `_normalize_model_name`.
-- **File**: `src/free_claude_code/config/provider_catalog.py`
-  - **Scope**: Mise à jour de `ANTIGRAVITY_DEFAULT_BASE` vers `https://daily-cloudcode-pa.googleapis.com`.
-- **File**: `tests/api/test_model_listing.py` & `tests/providers/test_antigravity_client.py`
-  - **Scope**: Mise à jour des tests pour valider le listing épuré sans doublon `(no thinking)` ni double préfixe.
+- **File**: `src/free_claude_code/providers/antigravity/auth.py`
+  - **Scope**: Suppression des fonctions Keyring/DBus et du fallback vers `~/.gemini/google_accounts.json`.
+- **File**: `src/free_claude_code/config/admin/status.py`
+  - **Scope**: Suppression du token path hôte `~/.gemini/antigravity-cli/antigravity-oauth-token`.
+- **File**: `tests/providers/test_antigravity_auth.py`
+  - **Scope**: Ajout du test d'isolation `test_get_antigravity_account_email_strict_isolation`.
 - **File**: `pyproject.toml` & `uv.lock`
-  - **Scope**: Version `4.28.5` prête.
+  - **Scope**: Version bump `4.28.5` -> `4.28.6`.
 - **File**: `.GCC/main.md`
-  - **Scope**: Documentation de la décision d'alignement d'endpoint et de la release 4.28.5.
+  - **Scope**: Journalisation du milestone 4.28.6.
 
 ## 🛠️ Static Codebase Health
 - **Verification Command Run**: `./scripts/ci.sh`
